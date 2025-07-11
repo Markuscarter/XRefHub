@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xrefhub - Settings</title>
+    <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Xrefhub Settings</h1>
+        </header>
+
+        <main>
+            <section class="settings-section">
+                <h2>AI Provider</h2>
+                <p class="description">Select the default AI provider for analysis.</p>
+                <div class="provider-grid">
+                    <div class="provider-card" data-provider="gemini">
+                        <div class="provider-name">💎 Gemini</div>
+                        <div class="provider-description">Uses your Google account. No API key needed.</div>
+                    </div>
+                    <div class="provider-card" data-provider="chatgpt">
+                        <div class="provider-name">💬 ChatGPT</div>
+                        <div class="provider-description">Requires your OpenAI API key.</div>
+                    </div>
+                    <div class="provider-card" data-provider="groq">
+                        <div class="provider-name">🚀 Groq</div>
+                        <div class="provider-description">Requires your Groq API key.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Credentials & IDs</h2>
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" class="input-field" placeholder="Enter your name or handle">
+                </div>
+                <div class="input-group">
+                    <label for="chatgpt-api-key">ChatGPT API Key</label>
+                    <input type="password" id="chatgpt-api-key" class="input-field" placeholder="Enter your OpenAI API key">
+                </div>
+                <div class="input-group">
+                    <label for="groq-api-key">Groq API Key</label>
+                    <input type="password" id="groq-api-key" class="input-field" placeholder="Enter your Groq API key">
+                </div>
+                <div class="input-group">
+                    <label for="google-sheet-id">Google Sheet ID</label>
+                    <input type="text" id="google-sheet-id" class="input-field" placeholder="Enter your Google Sheet ID">
+                </div>
+                <div class="input-group">
+                    <label for="google-folder-id">Google Drive Folder ID</label>
+                    <input type="text" id="google-folder-id" class="input-field" placeholder="Enter your Google Drive Folder ID">
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <button id="save-button" class="btn btn-primary">Save Settings</button>
+            <div id="save-status"></div>
+        </footer>
+    </div>
+    <script src="settings.js"></script>
+</body>
+</html>

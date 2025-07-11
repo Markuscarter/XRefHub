@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Xrefhub Analysis Tool</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Xrefhub</h1>
+            <div class="header-actions">
+                <button id="open-in-tab-button" class="btn-icon" title="Open in New Tab">↗️</button>
+                <a href="#" id="settings-link" class="btn-icon" title="Settings">⚙️</a>
+            </div>
+        </header>
+        <main>
+            <div class="input-group">
+                <label for="post-content">Post Content</label>
+                <textarea id="post-content" rows="4" placeholder="Scanning for content..."></textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="ai-summary">Context and Intent Summary</label>
+                <textarea id="ai-summary" rows="3" readonly></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Labels</label>
+                <div id="labels-container" class="labels-container">
+                    <!-- Checkboxes will be populated here -->
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="ai-resolution">AI Resolution</label>
+                <textarea id="ai-resolution" rows="2" readonly></textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="final-output">Final Formatted Output</label>
+                <textarea id="final-output" rows="3" readonly></textarea>
+            </div>
+
+        </main>
+        <footer>
+            <div class="button-container">
+                <button id="analyze-button" class="action-button">Analyze</button>
+                <div class="output-actions">
+                    <button id="copy-button" class="btn">Copy</button>
+                    <button id="submit-button" class="btn btn-primary">Submit to Sheet</button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <div class="chat-container">
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a follow-up question...">
+            <button id="chat-send-button" class="btn">Send</button>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 

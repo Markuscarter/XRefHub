@@ -1,0 +1,26 @@
+{
+  "Harassment": {
+    "description": "Targeting individuals with abusive behavior.",
+    "policy_section": "Section 4.1",
+    "action": "Account Suspension",
+    "risk_color": "Red"
+  },
+  "Spam": {
+    "description": "Sending unsolicited or repetitive messages.",
+    "policy_section": "Section 2.3",
+    "action": "Content Removal",
+    "risk_color": "Yellow"
+  },
+  "Misinformation": {
+    "description": "Sharing false information that can cause harm.",
+    "policy_section": "Section 3.2",
+    "action": "Warning Label",
+    "risk_color": "Yellow"
+  },
+  "Hate Speech": {
+    "description": "Content that promotes violence or incites hatred against individuals or groups.",
+    "policy_section": "Section 1.1",
+    "action": "Immediate Ban",
+    "risk_color": "Red"
+  }
+} 
