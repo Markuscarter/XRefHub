@@ -1,4 +1,4 @@
-import { analyzePost, getChatReply } from './ai-analyzer.js';
+import { analyzePost, getChatReply, getDeeperAnalysis as getDeeperAnalysisFromAI } from './ai-analyzer.js';
 
 // --- Google Sheets Integration ---
 
@@ -32,6 +32,13 @@ async function getSheetId() {
 }
 
 async function getLabelsFromSheet() {
+    // Check cache first
+    const now = new Date().getTime();
+    const cache = await chrome.storage.local.get(['labelsCache']);
+    if (cache.labelsCache && (now - cache.labelsCache.timestamp < 3600000)) { // 1 hour TTL
+        return cache.labelsCache.labels;
+    }
+
     const sheetId = await getSheetId();
     if (!sheetId) {
         throw new Error("Google Sheet ID is not set. Please set it in the extension's options page.");
@@ -59,11 +66,16 @@ async function getLabelsFromSheet() {
         }
 
         const data = await response.json();
-        if (!data.values) {
-            return [];
+        let labels = [];
+        if (data.values) {
+            labels = data.values.map(row => ({ name: row[0] })).filter(label => label.name);
         }
+        
+        // Store in cache
+        await chrome.storage.local.set({ 
+            labelsCache: { labels, timestamp: new Date().getTime() }
+        });
 
-        const labels = data.values.map(row => ({ name: row[0] })).filter(label => label.name);
         return labels;
 
     } catch (error) {
@@ -113,8 +125,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const content = await scanPage(request.tabId);
                 sendResponse({ content });
             } else if (request.action === 'analyze') {
-                const analysis = await handleAnalysis(request.content);
+                const analysis = await handleAnalysis(request.content, request.mediaUrl);
                 sendResponse(analysis);
+            } else if (request.action === 'deeperAnalysis') {
+                const deeperAnalysis = await getDeeperAnalysis(request.content, request.mediaUrl);
+                sendResponse({ deeperAnalysis });
             } else if (request.action === 'writeToSheet') {
                 const result = await writeToSheet(request.data);
                 sendResponse({ success: true, result });
@@ -164,7 +179,7 @@ async function scanPage(tabId) {
  * @param {string} content The content to analyze.
  * @returns {Promise<object>} The analysis result from the AI.
  */
-async function handleAnalysis(content) {
+async function handleAnalysis(content, mediaUrl) {
     // First, get the latest rules from the Google Sheet.
     // This makes our AI context-aware of the current labels.
     const labelsData = await getLabelsFromSheet();
@@ -173,7 +188,19 @@ async function handleAnalysis(content) {
     // This could be improved to include descriptions if available.
     const rules = labelsData.map(label => `- ${label.name}`).join('\n');
     
-    const analysis = await analyzePost(content, rules);
+    const analysis = await analyzePost(content, mediaUrl, rules);
+    return analysis;
+}
+
+/**
+ * Handles the deeper analysis process.
+ * @param {string} content The content to analyze.
+ * @returns {Promise<string>} The detailed analysis text.
+ */
+async function getDeeperAnalysis(content, mediaUrl) {
+    const labelsData = await getLabelsFromSheet();
+    const rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    const analysis = await getDeeperAnalysisFromAI(content, mediaUrl, rules);
     return analysis;
 }
 

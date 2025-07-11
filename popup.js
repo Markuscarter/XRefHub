@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitButton = document.getElementById('submit-button');
     const settingsLink = document.getElementById('settings-link');
     const openInTabButton = document.getElementById('open-in-tab-button');
+    const deeperAnalysisButton = document.getElementById('deeper-analysis-button');
+    const deeperAnalysisResult = document.getElementById('deeper-analysis-result');
 
     const chatLog = document.getElementById('chat-log');
     const chatInput = document.getElementById('chat-input');
@@ -24,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let username = 'Unknown User';
     let analysisResult = {};
     let chatHistory = [];
+    let mediaUrl = '';
 
     // --- Core Functions ---
     const getUsername = async () => {
@@ -107,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const labelsResponse = await chrome.runtime.sendMessage({ action: 'getLabels' });
             const rules = (labelsResponse.data || []).map(l => l.name).join(', ');
-            const result = await chrome.runtime.sendMessage({ action: 'analyze', content, rules });
+            const result = await chrome.runtime.sendMessage({ action: 'analyze', content, mediaUrl, rules });
             if (result.error) throw new Error(result.error);
             displayAnalysis(result);
         } catch (error) {
@@ -115,6 +118,29 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             analyzeButton.disabled = false;
             analyzeButton.textContent = 'Analyze';
+        }
+    };
+
+    const handleDeeperAnalysisClick = async () => {
+        const content = postContent.value.trim();
+        if (!content) return;
+
+        deeperAnalysisButton.disabled = true;
+        deeperAnalysisButton.textContent = 'Analyzing...';
+        deeperAnalysisResult.style.display = 'block';
+        deeperAnalysisResult.value = 'Generating deeper analysis...';
+
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'deeperAnalysis', content, mediaUrl });
+            if (response.error) {
+                throw new Error(response.error);
+            }
+            deeperAnalysisResult.value = response.deeperAnalysis;
+        } catch (error) {
+            deeperAnalysisResult.value = `Error: ${error.message}`;
+        } finally {
+            deeperAnalysisButton.disabled = false;
+            deeperAnalysisButton.textContent = 'Get Deeper Analysis';
         }
     };
 
@@ -128,7 +154,14 @@ document.addEventListener('DOMContentLoaded', () => {
         chatSendButton.disabled = true;
 
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'chat', message, history: chatHistory });
+            // Include the original analysis in the history for better context
+            const fullHistory = [
+                { role: 'system', content: `Original post for analysis: "${postContent.value}"` },
+                { role: 'system', content: `Initial analysis summary: "${aiSummary.value}"` },
+                { role: 'system', content: `Initial analysis resolution: "${aiResolution.value}"` },
+                ...chatHistory
+            ];
+            const response = await chrome.runtime.sendMessage({ action: 'chat', message, history: fullHistory });
             if (response.error) {
                 throw new Error(response.error);
             }
@@ -198,7 +231,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     files: ['content-scanner.js'],
                 });
                 if (results && results[0] && results[0].result) {
-                    postContent.value = results[0].result.adText;
+                    const result = results[0].result;
+                    postContent.value = result.adText;
+                    mediaUrl = result.mediaUrl;
                     // Automatically trigger analysis after scanning
                     handleAnalysisClick();
                 }
@@ -221,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         chrome.runtime.openOptionsPage();
     });
+    deeperAnalysisButton.addEventListener('click', handleDeeperAnalysisClick);
     openInTabButton.addEventListener('click', () => {
         chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
     });

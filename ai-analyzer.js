@@ -20,7 +20,7 @@ async function getApiKey(provider) {
     });
 }
 
-export async function analyzePost(postContent, rules) {
+export async function analyzePost(postContent, mediaUrl, rules) {
     const provider = await getAiProvider();
     const apiKey = await getApiKey(provider);
     
@@ -34,8 +34,10 @@ export async function analyzePost(postContent, rules) {
       **Post Content:**
       "${postContent}"
 
+      ${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+
       **Your Task:**
-      1.  **Context and Intent Summary:** Briefly summarize the post's content, its likely intent (e.g., marketing, personal opinion), and the context.
+      1.  **Context and Intent Summary:** Briefly summarize the post's content and its associated media (if any). Describe its likely intent (e.g., marketing, personal opinion) and the context.
       2.  **AI Resolution:** Based on the rules and the post content, provide a concise, one-sentence explanation for why the suggested labels apply. This reason should be based on weighted reasoning of the rules. If no rules apply, state "No violation found." The entire resolution must not exceed 160 characters.
       3.  **Suggested Labels:** Return a list of labels from the Google Sheet that apply to the post. If none apply, return an empty list.
 
@@ -59,6 +61,48 @@ export async function analyzePost(postContent, rules) {
     } catch (error) {
         console.error(`Error analyzing post with ${provider}:`, error);
         return { error: error.message };
+    }
+}
+
+export async function getDeeperAnalysis(postContent, mediaUrl, rules) {
+    const provider = await getAiProvider();
+    const apiKey = await getApiKey(provider);
+    
+    const prompt = `
+      You are an expert policy analyst. A user has requested a deeper analysis of a social media post.
+      Your task is to provide a detailed breakdown of the post's context, intent, and potential policy violations.
+
+      **Rules from Google Sheet:**
+      ${rules}
+
+      **Post Content:**
+      "${postContent}"
+
+      ${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+
+      **Your Response:**
+      Provide a detailed, multi-paragraph explanation covering:
+      1.  **Nuanced Intent:** Go beyond the surface level. What is the likely underlying goal of this post? (e.g., rage-bait, astroturfing, genuine opinion, satire).
+      2.  **Potential Audience:** Who is this content likely targeting?
+      3.  **Policy Considerations:** Name specific platform policies (e.g., "Facebook's Hate Speech Policy", "X's Civic Integrity Policy") that might be relevant. Do NOT invent URLs. Explain *why* these policies may or may not apply.
+      
+      Structure your response as a single block of text.
+    `;
+
+    try {
+        if (provider === 'gemini') {
+            const result = await callGoogleGenerativeAI(prompt, false);
+            return result.resolution;
+        } else if (provider === 'chatgpt') {
+            if (!apiKey) throw new Error('ChatGPT API key not set.');
+            return await callOpenAIWithMessages([{ role: "user", content: prompt }], apiKey, false);
+        } else if (provider === 'groq') {
+            if (!apiKey) throw new Error('Groq API key not set.');
+            return await callGroqWithMessages([{ role: "user", content: prompt }], apiKey, false);
+        }
+    } catch (error) {
+        console.error(`Error in getDeeperAnalysis with ${provider}:`, error);
+        return `Error generating deeper analysis: ${error.message}`;
     }
 }
 
@@ -116,8 +160,7 @@ async function callGoogleGenerativeAI(prompt, expectJson = true) {
 }
 
 async function callOpenAI(prompt, apiKey) {
-    const response = await callOpenAIWithMessages([{ role: "user", content: prompt }], apiKey);
-    return JSON.parse(response);
+    return callOpenAIWithMessages([{ role: "user", content: prompt }], apiKey);
 }
 
 async function callOpenAIWithMessages(messages, apiKey, expectJson = true) {
@@ -136,12 +179,12 @@ async function callOpenAIWithMessages(messages, apiKey, expectJson = true) {
     if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
     const data = await response.json();
     const content = data.choices[0].message.content;
-    return expectJson ? JSON.parse(content) : content;
+    console.log('Raw OpenAI Response content:', content);
+    return expectJson ? extractAndParseJson(content) : content;
 }
 
 async function callGroq(prompt, apiKey) {
-    const response = await callGroqWithMessages([{ role: "user", content: prompt }], apiKey);
-    return JSON.parse(response);
+    return callGroqWithMessages([{ role: "user", content: prompt }], apiKey);
 }
 
 async function callGroqWithMessages(messages, apiKey, expectJson = true) {
@@ -160,5 +203,34 @@ async function callGroqWithMessages(messages, apiKey, expectJson = true) {
     if (!response.ok) throw new Error(`Groq API error: ${response.statusText}`);
     const data = await response.json();
     const content = data.choices[0].message.content;
-    return expectJson ? JSON.parse(content) : content;
+    console.log('Raw Groq Response content:', content);
+    return expectJson ? extractAndParseJson(content) : content;
+}
+
+function extractAndParseJson(text) {
+    // First, remove markdown fences if they exist
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.slice(7, -3);
+    } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.slice(3, -3);
+    }
+
+    // Find the first '{' and the last '}' to extract the JSON object
+    const startIndex = cleanedText.indexOf('{');
+    const endIndex = cleanedText.lastIndexOf('}');
+
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+        console.error("Could not find a valid JSON object in the AI's response:", cleanedText);
+        throw new Error("Could not find a valid JSON object in the AI's response.");
+    }
+
+    const jsonString = cleanedText.substring(startIndex, endIndex + 1);
+
+    try {
+        return JSON.parse(jsonString);
+    } catch (e) {
+        console.error("Failed to parse extracted JSON:", jsonString, "Original error:", e);
+        throw new Error("The AI's response was not formatted correctly.");
+    }
 } 

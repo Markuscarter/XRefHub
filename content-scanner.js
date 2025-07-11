@@ -3,6 +3,36 @@
  * It returns an object containing multiple fields.
  */
 
+function getPostContent() {
+    const adText = document.body.innerText;
+    let mediaUrl = '';
+
+    // Try to find the main image (works for many sites)
+    const mainImage = document.querySelector('meta[property="og:image"]');
+    if (mainImage) {
+        mediaUrl = mainImage.content;
+    } else {
+        // Fallback for sites that use a different structure (e.g., Twitter)
+        const twitterImage = document.querySelector('meta[name="twitter:image"]');
+        if (twitterImage) {
+            mediaUrl = twitterImage.content;
+        }
+    }
+
+    // Try to find the main video
+    const mainVideo = document.querySelector('meta[property="og:video"]');
+    if (mainVideo) {
+        mediaUrl = mainVideo.content;
+    }
+
+    return {
+        adText,
+        mediaUrl,
+    };
+}
+
+getPostContent();
+
 (() => {
     console.log('[Xrefhub Scanner] Starting structured data scan on:', window.location.href);
 
