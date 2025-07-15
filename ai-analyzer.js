@@ -143,6 +143,65 @@ export async function getChatReply(message, history) {
     }
 }
 
+export async function getNBMResponse(postContent, mediaUrl, rules, reviewPageContext = null) {
+    const provider = await getAiProvider();
+    const apiKey = await getApiKey(provider);
+    
+    const prompt = `
+You are a Content and Ad Review Agent with access to internal policy documentation and enforcement protocols. Your role is to analyze social media posts and ads, assess policy violations, and determine the appropriate next steps for agent interaction.
+
+**Rules from Google Sheet:**
+${rules}
+
+**Post Content:**
+"${postContent}"
+
+${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+
+${reviewPageContext ? `**Review Page Context:**\n${reviewPageContext}` : ''}
+
+**Your Analysis Process:**
+1. **Initial Assessment:** Analyze the post content and media for policy violations based on the provided rules. Consider context, intent, and potential audience impact.
+
+2. **Review Page Context Analysis:** If review page context is available, scan for additional context clues:
+   - Look for existing system labels (Quick Promote, Hate, Inappropriate, Payment Risk, Content High Risk, etc.)
+   - Identify any policy step-changing labels that require escalation
+   - Note any pre-existing enforcement actions or warnings
+
+3. **Policy-Based Next Steps:** Based on your assessment and any review page context, determine the appropriate agent interaction protocol:
+   - Apply relevant labels from the rules
+   - Determine if escalation is required (e.g., "System has marked ad label for HATE - agent interaction: Label the ad with applicable labels, submit the ad, then return to marked ad and escalate in ART to internal team for more review")
+   - Identify any special handling requirements based on risk level
+
+**Your Response:**
+Return a JSON object with:
+- "summary": Brief context and intent summary
+- "resolution": One-sentence explanation for suggested labels (max 160 characters)
+- "suggestedLabels": List of applicable labels from the rules
+- "reviewPageContext": Any additional context found from review page analysis (if applicable)
+- "nextSteps": Expected agent interaction protocol based on policy enforcement tree
+- "escalationRequired": Boolean indicating if escalation is needed
+- "riskLevel": Assessment of content risk (Low/Medium/High/Critical)
+
+**Important:** Do not include API keys, personal data, or sensitive strings in your response. Focus on policy compliance and enforcement protocols.
+`;
+
+    try {
+        if (provider === 'gemini') {
+            return await callGoogleGenerativeAI(prompt);
+        } else if (provider === 'chatgpt') {
+            if (!apiKey) throw new Error('ChatGPT API key not set.');
+            return await callOpenAI(prompt, apiKey);
+        } else if (provider === 'groq') {
+            if (!apiKey) throw new Error('Groq API key not set.');
+            return await callGroq(prompt, apiKey);
+        }
+    } catch (error) {
+        console.error(`Error in NBM analysis with ${provider}:`, error);
+        return { error: error.message };
+    }
+}
+
 // --- AI API Call Implementations ---
 
 async function callGoogleGenerativeAI(prompt, expectJson = true) {

@@ -1,4 +1,4 @@
-import { analyzePost, getChatReply, getDeeperAnalysis as getDeeperAnalysisFromAI } from './ai-analyzer.js';
+import { analyzePost, getChatReply, getDeeperAnalysis as getDeeperAnalysisFromAI, getNBMResponse } from './ai-analyzer.js';
 
 // --- Google Sheets Integration ---
 
@@ -137,8 +137,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const labels = await getLabels();
                 sendResponse({ data: labels });
             } else if (request.action === 'chat') {
-                const reply = await getChatReply(request.message, request.history);
-                sendResponse({ reply });
+                // Check if message is "NBM" trigger
+                if (request.message.trim().toUpperCase() === 'NBM') {
+                    // Get current page content for NBM analysis
+                    const content = await scanPage(request.tabId);
+                    const labelsData = await getLabelsFromSheet();
+                    const rules = labelsData.map(label => `- ${label.name}`).join('\n');
+                    
+                    // Get review page context if available (you can enhance this later)
+                    const reviewPageContext = null; // TODO: Extract review page context
+                    
+                    const nbmResult = await getNBMResponse(content, null, rules, reviewPageContext);
+                    sendResponse({ reply: nbmResult });
+                } else {
+                    const reply = await getChatReply(request.message, request.history);
+                    sendResponse({ reply });
+                }
             }
         } catch (error) {
             console.error(`Error during action "${request.action}":`, error);
