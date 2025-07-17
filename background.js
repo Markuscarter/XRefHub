@@ -1,4 +1,5 @@
 import { analyzePost, getChatReply, getDeeperAnalysis as getDeeperAnalysisFromAI, getNBMResponse } from './ai-analyzer.js';
+import { fetchAllRules } from './google-drive.js';
 
 // --- Google Sheets Integration ---
 
@@ -136,13 +137,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             } else if (request.action === 'getLabels') {
                 const labels = await getLabels();
                 sendResponse({ data: labels });
+            } else if (request.action === 'verifyDriveConnection') {
+                try {
+                    const result = await fetchAllRules();
+                    console.log('[✅ DRIVE VERIFIED] Successfully connected and fetched rules');
+                    sendResponse({ success: true, result });
+                } catch (error) {
+                    console.log('[❌ DRIVE ERROR]:', error.message);
+                    sendResponse({ success: false, error: error.message });
+                }
             } else if (request.action === 'chat') {
                 // Check if message is "NBM" trigger
                 if (request.message.trim().toUpperCase() === 'NBM') {
                     // Get current page content for NBM analysis
                     const content = await scanPage(request.tabId);
                     const labelsData = await getLabelsFromSheet();
-                    const rules = labelsData.map(label => `- ${label.name}`).join('\n');
+                    let rules = labelsData.map(label => `- ${label.name}`).join('\n');
+                    
+                    // Try to get enhanced rules from Google Drive if available
+                    try {
+                        const driveRules = await fetchAllRules();
+                        if (driveRules) {
+                            rules = driveRules + '\n\n--- Sheet Labels ---\n' + rules;
+                            console.log('Enhanced NBM analysis using both Drive and Sheet rules');
+                        }
+                    } catch (error) {
+                        console.log('Using sheet rules only for NBM (Drive not available):', error.message);
+                    }
                     
                     // Get review page context if available (you can enhance this later)
                     const reviewPageContext = null; // TODO: Extract review page context
@@ -200,7 +221,18 @@ async function handleAnalysis(content, mediaUrl) {
     
     // We'll format the labels as a simple string for the prompt.
     // This could be improved to include descriptions if available.
-    const rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    let rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    
+    // Try to get enhanced rules from Google Drive if available
+    try {
+        const driveRules = await fetchAllRules();
+        if (driveRules) {
+            rules = driveRules + '\n\n--- Sheet Labels ---\n' + rules;
+            console.log('Enhanced analysis using both Drive and Sheet rules');
+        }
+    } catch (error) {
+        console.log('Using sheet rules only (Drive not available):', error.message);
+    }
     
     const analysis = await analyzePost(content, mediaUrl, rules);
     return analysis;
@@ -213,7 +245,19 @@ async function handleAnalysis(content, mediaUrl) {
  */
 async function getDeeperAnalysis(content, mediaUrl) {
     const labelsData = await getLabelsFromSheet();
-    const rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    let rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    
+    // Try to get enhanced rules from Google Drive if available
+    try {
+        const driveRules = await fetchAllRules();
+        if (driveRules) {
+            rules = driveRules + '\n\n--- Sheet Labels ---\n' + rules;
+            console.log('Enhanced deeper analysis using both Drive and Sheet rules');
+        }
+    } catch (error) {
+        console.log('Using sheet rules only for deeper analysis (Drive not available):', error.message);
+    }
+    
     const analysis = await getDeeperAnalysisFromAI(content, mediaUrl, rules);
     return analysis;
 }

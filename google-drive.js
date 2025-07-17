@@ -62,16 +62,55 @@ async function findFolderId(folderName) {
 /**
  * Fetches the content of a Google Doc file by its ID.
  * @param {string} fileId The ID of the Google Doc.
- * @returns {Promise<string|null>} The text content of the file.
+ * @returns {Promise<string|null>} The text content of the file with images and descriptions.
  */
 async function getRuleFileContent(fileId) {
   try {
     const token = await getAuthToken();
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
+    
+    // First try to export as HTML to capture images and rich content
+    let response = await fetch(`https://www.googleapis.com/drive/v3s/${fileId}/export?mimeType=text/html`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
+    
+    if (response.ok) {
+      const htmlContent = await response.text();
+      
+      // Extract text content from HTML while preserving image descriptions
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      
+      // Extract text content
+      let textContent = doc.body.textContent || doc.body.innerText || ''; 
+      // Extract image descriptions and alt text
+      const images = doc.querySelectorAll('img');
+      let imageDescriptions = '';
+      images.forEach((img, index) => {
+        const alt = img.alt || img.title || `Image ${index + 1}`;
+        const src = img.src || '';
+        imageDescriptions += `\nImage ${index + 1}: ${alt}`;
+        if (src) {
+          imageDescriptions += ` (URL: ${src})`;
+        }
+      });
+      
+      // Combine text content with image descriptions
+      const fullContent = textContent + imageDescriptions;
+      console.log(`Successfully extracted HTML content with ${images.length} images for file ID ${fileId}`);
+      return fullContent;
+    }
+    
+    // Fallback to plain text if HTML export fails
+    console.log(`HTML export failed for file ID ${fileId}, falling back to plain text`);
+    response = await fetch(`https://www.googleapis.com/drive/v3s/${fileId}/export?mimeType=text/plain`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-    return await response.text();
+    const textContent = await response.text();
+    console.log(`Successfully extracted plain text content for file ID ${fileId}`);
+    return textContent;
+    
   } catch (error) {
     console.error(`Error fetching content for file ID ${fileId}:`, error);
     return null; // Return null to indicate failure for a single file
@@ -116,6 +155,8 @@ export async function fetchAllRules() {
       }
     }
     console.log('Successfully fetched and concatenated all rule files.');
+    console.log('Final rules content length:', allRulesContent.length);
+    console.log('Rules content preview:', allRulesContent.substring(0, 500));
     return allRulesContent;
 
   } catch (error) {
