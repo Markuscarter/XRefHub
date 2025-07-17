@@ -147,6 +147,39 @@ export async function getNBMResponse(postContent, mediaUrl, rules, reviewPageCon
     const provider = await getAiProvider();
     const apiKey = await getApiKey(provider);
     
+    // Parse review page context if it's a string (JSON)
+    let parsedReviewContext = null;
+    if (reviewPageContext && typeof reviewPageContext === 'string') {
+        try {
+            parsedReviewContext = JSON.parse(reviewPageContext);
+        } catch (e) {
+            console.warn('Could not parse review page context JSON');
+        }
+    } else if (reviewPageContext) {
+        parsedReviewContext = reviewPageContext;
+    }
+    
+    // Build review context summary
+    let reviewContextSummary = '';
+    if (parsedReviewContext) {
+        const indicators = parsedReviewContext.statusIndicators ? Object.values(parsedReviewContext.statusIndicators).map(s => s.text).join(', ') : '';
+        const formData = parsedReviewContext.formData ? Object.keys(parsedReviewContext.formData).join(', ') : '';
+        const uiElements = parsedReviewContext.uiElements ? Object.values(parsedReviewContext.uiElements).map(u => u.text).join(', ') : '';
+        const reviewContext = parsedReviewContext.reviewContext ? Object.values(parsedReviewContext.reviewContext).map(r => r.text).join(', ') : '';
+        const tableCount = parsedReviewContext.tableData ? Object.keys(parsedReviewContext.tableData).length : 0;
+        
+        reviewContextSummary = `
+**Review Page Context Analysis:**
+${JSON.stringify(parsedReviewContext, null, 2)}
+
+**Key Review Page Elements Found:**
+${indicators ? `- Status Indicators: ${indicators}` : ''}
+${formData ? `- Form Data: ${formData}` : ''}
+${uiElements ? `- UI Elements: ${uiElements}` : ''}
+${reviewContext ? `- Review Context: ${reviewContext}` : ''}
+${tableCount > 0 ? `- Table Data Available: ${tableCount} tables` : ''}`;
+    }
+    
     const prompt = `
 You are a Content and Ad Review Agent with access to internal policy documentation and enforcement protocols. Your role is to analyze social media posts and ads, assess policy violations, and determine the appropriate next steps for agent interaction.
 
@@ -158,7 +191,7 @@ ${rules}
 
 ${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
 
-${reviewPageContext ? `**Review Page Context:**\n${reviewPageContext}` : ''}
+${reviewContextSummary}
 
 **Your Analysis Process:**
 1. **Initial Assessment:** Analyze the post content and media for policy violations based on the provided rules. Consider context, intent, and potential audience impact.
@@ -167,11 +200,15 @@ ${reviewPageContext ? `**Review Page Context:**\n${reviewPageContext}` : ''}
    - Look for existing system labels (Quick Promote, Hate, Inappropriate, Payment Risk, Content High Risk, etc.)
    - Identify any policy step-changing labels that require escalation
    - Note any pre-existing enforcement actions or warnings
+   - Analyze form data for current review status and actions taken
+   - Consider UI elements that indicate review workflow stage
+   - Examine table data for performance metrics or risk indicators
 
 3. **Policy-Based Next Steps:** Based on your assessment and any review page context, determine the appropriate agent interaction protocol:
    - Apply relevant labels from the rules
    - Determine if escalation is required (e.g., "System has marked ad label for HATE - agent interaction: Label the ad with applicable labels, submit the ad, then return to marked ad and escalate in ART to internal team for more review")
    - Identify any special handling requirements based on risk level
+   - Consider current review status and suggest appropriate next actions
 
 **Your Response:**
 Return a JSON object with:
@@ -182,6 +219,8 @@ Return a JSON object with:
 - "nextSteps": Expected agent interaction protocol based on policy enforcement tree
 - "escalationRequired": Boolean indicating if escalation is needed
 - "riskLevel": Assessment of content risk (Low/Medium/High/Critical)
+- "reviewWorkflowStage": Current stage in review process (if detectable from context)
+- "recommendedActions": Specific actions the agent should take based on current context
 
 **Important:** Do not include API keys, personal data, or sensitive strings in your response. Focus on policy compliance and enforcement protocols.
 `;
