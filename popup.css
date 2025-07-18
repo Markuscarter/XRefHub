@@ -1,17 +1,17 @@
 /* --- Base Styles & Variables --- */
 :root {
-    --primary-color: #3A8DFF;
-    --primary-hover: #5AAEFF;
-    --secondary-color: #333333;
-    --secondary-hover: #444444;
-    --text-color: #EAEAEA;
-    --text-secondary: #B0B0B0;
-    --bg-color: #121212;
-    --container-bg: #1E1E1E;
-    --border-color: #2F2F2F;
+    --primary-color: #1D9BF0; /* X's brand blue */
+    --primary-hover: #1A8CD8;
+    --secondary-color: #EFF3F4;
+    --secondary-hover: #E7E7E8;
+    --text-color: #0F1419;
+    --text-secondary: #536471;
+    --bg-color: #F7F9F9;
+    --container-bg: #FFFFFF;
+    --border-color: #EFF3F4;
     --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     --border-radius: 8px;
-    --box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    --box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 body {
