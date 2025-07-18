@@ -281,17 +281,23 @@ async function callOpenAI(prompt, apiKey) {
 }
 
 async function callOpenAIWithMessages(messages, apiKey, expectJson = true) {
+    const body = {
+        model: "gpt-3.5-turbo",
+        messages: messages,
+        max_tokens: 2048, // Increased token limit for detailed JSON
+    };
+
+    if (expectJson) {
+        body.response_format = { "type": "json_object" };
+    }
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: messages,
-            max_tokens: 150,
-        }),
+        body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
     const data = await response.json();
@@ -305,17 +311,23 @@ async function callGroq(prompt, apiKey) {
 }
 
 async function callGroqWithMessages(messages, apiKey, expectJson = true) {
+    const body = {
+        model: "llama3-8b-8192", 
+        messages: messages,
+        max_tokens: 2048, // Increased token limit for detailed JSON
+    };
+
+    if (expectJson) {
+        body.response_format = { "type": "json_object" };
+    }
+    
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-            model: "llama3-8b-8192", 
-            messages: messages,
-            max_tokens: 150,
-        }),
+        body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`Groq API error: ${response.statusText}`);
     const data = await response.json();
