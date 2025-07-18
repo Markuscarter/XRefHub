@@ -176,17 +176,20 @@ function getPostContent() {
     // Extract review-specific context (common patterns)
     const reviewContext = {};
     
-    // Helper function to find text near a heading
-    function findTextNearHeading(keywords) {
+    // Helper function to find text in the next sibling element after a heading
+    function findContentAfterHeading(keywords) {
         for (const tag of ['h1', 'h2', 'h3', 'h4', 'strong', 'b']) {
             for (const el of document.querySelectorAll(tag)) {
                 const headingText = el.innerText.toLowerCase();
                 if (keywords.some(k => headingText.includes(k))) {
-                    // Found a heading, now get the content from its parent or a sibling
-                    const parent = el.parentElement;
-                    if (parent && parent.innerText.length > el.innerText.length) {
-                        // Heuristic: if parent has more text, it might be the container
-                        return parent.innerText.replace(el.innerText, '').trim();
+                    // Found a heading, now find the content in the next element
+                    let nextEl = el.nextElementSibling;
+                    // Skip over non-content elements if necessary
+                    while (nextEl && (nextEl.tagName === 'BR' || nextEl.children.length > 0)) {
+                        nextEl = nextEl.nextElementSibling;
+                    }
+                    if (nextEl && nextEl.innerText) {
+                        return nextEl.innerText.trim();
                     }
                 }
             }
@@ -195,15 +198,15 @@ function getPostContent() {
     }
     
     // --- NEW: More specific contextual extraction ---
-    reviewContext.agentNotes = findTextNearHeading(['notes', 'comments', 'feedback', 'review history']);
-    reviewContext.targetingInfo = findTextNearHeading(['targeting', 'audience', 'location', 'market']);
-    reviewContext.userBio = findTextNearHeading(['about the user', 'user profile', 'bio']);
+    reviewContext.agentNotes = findContentAfterHeading(['notes', 'comments', 'feedback', 'review history']);
+    reviewContext.targetingInfo = findContentAfterHeading(['targeting', 'audience', 'location', 'market']);
+    reviewContext.userBio = findContentAfterHeading(['about the user', 'user profile', 'bio']);
     
     // Find existing labels more explicitly
     const existingLabels = [];
-    const labelsContainer = findTextNearHeading(['existing labels', 'current tags', 'labels applied']);
-    if (labelsContainer) {
-        existingLabels.push(...labelsContainer.split('\n').filter(l => l.trim() !== ''));
+    const labelsContainerText = findContentAfterHeading(['existing labels', 'current tags', 'labels applied']);
+    if (labelsContainerText) {
+        existingLabels.push(...labelsContainerText.split('\n').filter(l => l.trim() !== ''));
     }
     reviewContext.existingLabels = existingLabels;
 
