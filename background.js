@@ -190,20 +190,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  * @returns {Promise<string>} The extracted content of the page.
  */
 async function scanPage(tabId) {
-    const results = await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content-scanner.js'],
-    });
+    try {
+        const results = await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['content-scanner.js'],
+            world: 'MAIN' // Execute in the page's context for better reliability
+        });
 
-    if (chrome.runtime.lastError) {
-        throw new Error(`Script injection failed: ${chrome.runtime.lastError.message}`);
-    }
+        if (chrome.runtime.lastError) {
+            console.error(`Script injection error: ${chrome.runtime.lastError.message}`);
+            throw new Error(`Script injection failed: ${chrome.runtime.lastError.message}`);
+        }
 
-    if (results && results.length > 0 && results[0].result) {
-        return results[0].result;
-    } else {
-        console.error('[Xrefhub Background] Failed to retrieve content from the page.');
-        throw new Error('Could not retrieve content from the page.');
+        // The result is often nested in an array, and the actual value is in the first element.
+        if (results && results.length > 0 && results[0].result) {
+            console.log('Scan successful, returning result:', results[0].result);
+            return results[0].result;
+        } else {
+            console.error('[Xrefhub Background] Failed to retrieve content from the page. The scanner might have returned null or an empty result.');
+            throw new Error('Could not retrieve valid content from the page. The page structure may be unsupported or it may still be loading.');
+        }
+    } catch (error) {
+        console.error('An unexpected error occurred during scanPage:', error);
+        // Re-throw the error so the popup can handle it.
+        throw error;
     }
 }
 
