@@ -84,7 +84,7 @@ function getPostContent() {
     // --- Enhanced Review Page Context Extraction ---
     
     // Extract review-specific labels and status indicators
-    const statusElements = document.querySelectorAll('[class*=status],class*="label],class*="badge],[class*="tag"]');
+    const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
     statusElements.forEach((el, index) => {
         const text = el.innerText.trim();
         const className = el.className;
@@ -137,7 +137,7 @@ function getPostContent() {
     });
 
     // Extract UI elements (buttons, dropdowns, etc.)
-    const buttons = document.querySelectorAll('button, [role=button"], [class*="btn"], [class*="button"]');
+    const buttons = document.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]');
     buttons.forEach((btn, index) => {
         const text = btn.innerText.trim();
         const className = btn.className;
@@ -230,9 +230,9 @@ function getPostContent() {
     // Look for specific review page indicators
     const reviewIndicators = {
         approval_status: document.querySelector('[class*="approved"], [class*="rejected"], [class*="pending"]'),
-        risk_level: document.querySelector('[class*=risk], [class*=danger"], [class*="warning"]'),
-        reviewer_info: document.querySelector('[class*="reviewer"],[class*="moderator"], [class*="admin"]'),
-        timestamp: document.querySelector('[class*=time"], [class*=date], [datetime]'), 
+        risk_level: document.querySelector('[class*="risk"], [class*="danger"], [class*="warning"]'),
+        reviewer_info: document.querySelector('[class*="reviewer"], [class*="moderator"], [class*="admin"]'),
+        timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'), 
         escalation: document.querySelector('[class*="escalate"], [class*=flag], [class*="report"]')
     };
 
