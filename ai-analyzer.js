@@ -248,6 +248,7 @@ async function callGoogleGenerativeAI(prompt, expectJson = true) {
         }],
         generationConfig: {
             response_mime_type: expectJson ? "application/json" : "text/plain",
+            maxOutputTokens: 4096, // Increased token limit
         }
     };
 
@@ -284,7 +285,7 @@ async function callOpenAIWithMessages(messages, apiKey, expectJson = true) {
     const body = {
         model: "gpt-3.5-turbo",
         messages: messages,
-        max_tokens: 2048, // Increased token limit for detailed JSON
+        max_tokens: 4096, // Increased token limit
     };
 
     if (expectJson) {
@@ -314,7 +315,7 @@ async function callGroqWithMessages(messages, apiKey, expectJson = true) {
     const body = {
         model: "llama3-8b-8192", 
         messages: messages,
-        max_tokens: 2048, // Increased token limit for detailed JSON
+        max_tokens: 4096, // Increased token limit
     };
 
     if (expectJson) {

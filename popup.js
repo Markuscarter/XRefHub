@@ -205,9 +205,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleError(error, context) {
         console.error(`[${context}]`, error);
-        // A more user-friendly error display could be implemented here
-        showToast(`Error: ${context} - ${error.message}`, 'error');
-        aiSummary.textContent = `Error during ${context.toLowerCase()}: ${error.message}`;
+        const errorMessage = `Error during ${context}: ${error.message}`;
+        
+        // Display error in the main UI
+        aiSummary.textContent = errorMessage;
+        aiResolution.textContent = 'An error occurred. See summary above.';
+        
+        // Also log the error in the chat for immediate visibility
+        chatHistory.push({ role: 'ai', content: `🚨 **System Error** 🚨\n\n**Context:** ${context}\n**Details:** ${error.message}` });
+        updateChatLog();
+
+        showToast(errorMessage, 'error');
     }
 
     function showToast(message, type = 'success') {
