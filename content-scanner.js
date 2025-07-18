@@ -3,8 +3,8 @@
  * It returns an object containing multiple fields with enhanced review page support.
  */
 
-// A more robust, single-function structure for content scanning.
-(async () => {
+// Enhanced content scanning function
+async function enhancedContentScan() {
     console.log('[Xrefhub Scanner] Starting enhanced scan...');
 
     const result = {
@@ -37,139 +37,112 @@
             }
         }
 
-        // --- All other data extraction logic from the original file ---
-        // (This includes statusIndicators, formData, tables, buttons, metadata, etc.)
-
+        // --- Status Indicators ---
         const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
         statusElements.forEach((el, index) => {
             const text = el.innerText.trim();
             if (text && text.length < 100) result.statusIndicators[`status_${index}`] = { text, className: el.className, element: el.tagName.toLowerCase() };
         });
 
+        // --- Form Data ---
         const formInputs = document.querySelectorAll('input, select, textarea, button');
         formInputs.forEach((input, index) => {
-            const type = input.type || input.tagName.toLowerCase();
-            const name = input.name || input.id || `input_${index}`;
-            if (input.value || input.placeholder) result.formData[name] = { type, value: input.value, placeholder: input.placeholder, element: input.tagName.toLowerCase() };
+            const key = `input_${index}`;
+            result.formData[key] = {
+                type: input.type || input.tagName.toLowerCase(),
+                value: input.value || input.innerText || '',
+                placeholder: input.placeholder || '',
+                name: input.name || '',
+                id: input.id || ''
+            };
         });
 
+        // --- Table Data ---
         const tables = document.querySelectorAll('table');
-        tables.forEach((table, tableIndex) => {
-            const tableData = [];
+        tables.forEach((table, index) => {
             const rows = table.querySelectorAll('tr');
-            rows.forEach((row, rowIndex) => {
-                const cells = row.querySelectorAll('td, th');
-                const rowData = [];
-                cells.forEach((cell, cellIndex) => {
-                    rowData.push({
-                        text: cell.innerText.trim(),
-                        isHeader: cell.tagName.toLowerCase() === 'th'
-                    });
-                });
-                if (rowData.length > 0) {
-                    tableData.push(rowData);
-                }
-            });
-            if (tableData.length > 0) {
-                result.tableData[`table_${tableIndex}`] = tableData;
+            result.tableData[`table_${index}`] = {
+                rowCount: rows.length,
+                headers: [],
+                sampleData: []
+            };
+            
+            const headers = table.querySelectorAll('th');
+            headers.forEach(th => result.tableData[`table_${index}`].headers.push(th.innerText.trim()));
+            
+            if (rows.length > 1) {
+                const firstDataRow = rows[1].querySelectorAll('td');
+                firstDataRow.forEach(td => result.tableData[`table_${index}`].sampleData.push(td.innerText.trim()));
             }
         });
 
-        const buttons = document.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]');
+        // --- UI Elements (buttons, links, etc.) ---
+        const buttons = document.querySelectorAll('button, .btn, [role="button"]');
         buttons.forEach((btn, index) => {
             const text = btn.innerText.trim();
-            const className = btn.className;
-            const disabled = btn.disabled;
-            if (text && text.length <50) {
+            if (text && text.length < 50) {
                 result.uiElements[`button_${index}`] = {
-                    text: text,
-                    className: className,
-                    disabled: disabled,
-                    element: btn.tagName.toLowerCase()
+                    text,
+                    className: btn.className,
+                    disabled: btn.disabled || false
                 };
             }
         });
 
-        const metaTags = document.querySelectorAll('meta');
-        metaTags.forEach((meta) => {
-            const name = meta.getAttribute('name') || meta.getAttribute('property') || meta.getAttribute('itemprop');
-            const content = meta.getAttribute('content');
-            if (name && content) {
-                result.metadata[name] = content;
-            }
-        });
-
-        const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-        jsonLdScripts.forEach((script, index) => {
-            try {
-                const jsonData = JSON.parse(script.innerText);
-                result.metadata[`jsonLd_${index}`] = jsonData;
-            } catch (e) {
-                console.warn('[Xrefhub Scanner] Could not parse JSON-LD data');
-            }
-        });
-
-        function findContentAfterHeading(keywords) {
-            for (const tag of ['h1', 'h2', 'h3', 'h4', 'strong', 'b']) {
-                for (const el of document.querySelectorAll(tag)) {
-                    const headingText = el.innerText.toLowerCase();
-                    if (keywords.some(k => headingText.includes(k))) {
-                        let nextEl = el.nextElementSibling;
-                        while (nextEl && (nextEl.tagName === 'BR' || nextEl.children.length > 0)) {
-                            nextEl = nextEl.nextElementSibling;
-                        }
-                        if (nextEl && nextEl.innerText) return nextEl.innerText.trim();
-                    }
-                }
-            }
-            return null;
-        }
-
-        result.reviewContext.agentNotes = findContentAfterHeading(['notes', 'comments', 'feedback', 'review history']);
-        result.reviewContext.targetingInfo = findContentAfterHeading(['targeting', 'audience', 'location', 'market']);
-        result.reviewContext.userBio = findContentAfterHeading(['about the user', 'user profile', 'bio']);
-        
-        const labelsContainerText = findContentAfterHeading(['existing labels', 'current tags', 'labels applied']);
-        if (labelsContainerText) {
-            result.reviewContext.existingLabels = labelsContainerText.split('\n').filter(l => l.trim() !== '');
-        }
-
-        // Look for common review page patterns
-        const reviewKeywords = ['review', 'approve', 'reject', 'pending', 'proved', 'rejected', 'escalate', 'risk', 'violation'];
-        reviewKeywords.forEach(keyword => {
-            const elements = document.querySelectorAll(`[class*="${keyword}"],id*="${keyword}", data-*="${keyword}"`);
-            elements.forEach((el, index) => {
-                const text = el.innerText.trim();
-                if (text && text.length < 200) {
-                    result.reviewContext[`${keyword}_${index}`] = {
-                        text: text,
+        // --- Review-Specific Context (for work pages) ---
+        const reviewKeywords = ['agent', 'review', 'note', 'targeting', 'bio', 'label', 'policy', 'violation'];
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach((el, index) => {
+            if (index > 1000) return; // Limit to prevent overwhelming
+            const text = el.innerText;
+            if (text && text.length > 10 && text.length < 500) {
+                const hasReviewKeyword = reviewKeywords.some(keyword => 
+                    text.toLowerCase().includes(keyword)
+                );
+                if (hasReviewKeyword) {
+                    result.reviewContext[`review_${Object.keys(result.reviewContext).length}`] = {
+                        content: text.trim(),
                         element: el.tagName.toLowerCase(),
                         className: el.className
                     };
                 }
-            });
-        });
-
-        // Look for specific review page indicators
-        const reviewIndicators = {
-            approval_status: document.querySelector('[class*="approved"], [class*="rejected"], [class*="pending"]'),
-            risk_level: document.querySelector('[class*="risk"], [class*="danger"], [class*="warning"]'),
-            reviewer_info: document.querySelector('[class*="reviewer"], [class*="moderator"], [class*="admin"]'),
-            timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'),
-            escalation: document.querySelector('[class*="escalate"], [class*="flag"], [class*="report"]')
-        };
-
-        Object.entries(reviewIndicators).forEach(([key, element]) => {
-            if (element) {
-                result.reviewContext[key] = {
-                    text: element.innerText.trim(),
-                    element: element.tagName.toLowerCase(),
-                    className: element.className
-                };
             }
         });
 
-        // --- Strategy for Post ID (from URL) ---
+        // --- Enhanced text extraction for any content that might be useful ---
+        const contentSelectors = [
+            'p', 'div[class*="content"]', 'div[class*="text"]', 'span[class*="text"]',
+            '[data-testid*="text"]', '[aria-label]', '.post', '.message', '.content'
+        ];
+        
+        let allText = '';
+        contentSelectors.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                const text = el.innerText.trim();
+                if (text && text.length > 20 && !allText.includes(text)) {
+                    allText += text + '\n';
+                }
+            });
+        });
+
+        // If we haven't found good content yet, use the enhanced text
+        if (result.adText === 'Not found' && allText.length > 50) {
+            result.adText = allText.substring(0, 2000); // Limit length
+        }
+
+        // --- Metadata ---
+        result.metadata = {
+            title: document.title || 'No title',
+            url: window.location.href,
+            userAgent: navigator.userAgent.substring(0, 100) + '...',
+            timestamp: Date.now(),
+            domain: window.location.hostname,
+            totalElements: document.querySelectorAll('*').length,
+            bodyText: document.body ? document.body.innerText.substring(0, 500) + '...' : 'No body'
+        };
+
+        // --- Extract Post ID (for Twitter/X posts) ---
         try {
             const urlParts = window.location.pathname.split('/');
             const statusIndex = urlParts.indexOf('status');
@@ -187,4 +160,7 @@
         console.error('[Xrefhub Scanner] A critical error occurred during scanning:', error);
         return { error: `Scanner failed: ${error.message}`, adText: 'Error during scan.' };
     }
-})(); 
+}
+
+// Execute the scan and return the result
+enhancedContentScan(); 

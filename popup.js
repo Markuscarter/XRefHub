@@ -29,9 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const activeTab = await getActiveTab();
             if (activeTab && activeTab.url && !activeTab.url.startsWith('chrome://')) {
-                const response = await chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id });
+                // Add timeout protection for the scan message
+                const response = await Promise.race([
+                    chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Scan timeout after 10 seconds')), 10000)
+                    )
+                ]);
+                
+                if (response && response.error) {
+                    throw new Error(response.error);
+                }
+                
                 if (response && response.content && response.content.adText && response.content.adText !== 'Not found') {
                     postContent.value = response.content.adText;
+                } else if (response && response.content) {
+                    // Try to get any useful text from the response
+                    const fallbackText = response.content.metadata?.bodyText || 
+                                       Object.values(response.content.reviewContext || {}).map(r => r.content).join('\n') ||
+                                       'Could not automatically scan content. Please paste it manually.';
+                    postContent.value = fallbackText;
                 } else {
                     postContent.value = 'Could not automatically scan content. Please paste it manually.';
                 }
@@ -42,6 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error during initialization:', error);
             postContent.value = `Error: ${error.message}`;
+            
+            // Show user-friendly error message
+            showToast(`Scan failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
         }
@@ -252,7 +272,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showToast(message, type = 'success') {
-        // A toast/notification could be implemented here for better UX
+        // Create a toast notification element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#ff4757' : '#2ed573'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            font-size: 14px;
+            max-width: 300px;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        // Add animation styles
+        if (!document.querySelector('#toast-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'toast-styles';
+            styles.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+        
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 5000);
+        
         console.log(`[Toast: ${type}] ${message}`);
     }
 
