@@ -222,7 +222,7 @@ async function scanPage(tabId) {
  * @param {string} content The content to analyze.
  * @returns {Promise<object>} The analysis result from the AI.
  */
-async function handleAnalysis(content, mediaUrl) {
+export async function handleAnalysis(content, mediaUrl) {
     // First, get the latest rules from the Google Sheet.
     // This makes our AI context-aware of the current labels.
     const labelsData = await getLabelsFromSheet();
