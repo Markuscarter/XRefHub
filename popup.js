@@ -3,263 +3,225 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM Elements ---
-    const postContent = document.getElementById('post-content');
-    const aiSummary = document.getElementById('ai-summary');
-    const labelsContainer = document.getElementById('labels-container');
-    const aiResolution = document.getElementById('ai-resolution');
-    const finalOutput = document.getElementById('final-output');
-
+    // --- Element Selectors ---
     const analyzeButton = document.getElementById('analyze-button');
+    const deeperAnalysisButton = document.getElementById('deeper-analysis-button');
     const copyButton = document.getElementById('copy-button');
     const submitButton = document.getElementById('submit-button');
+    const postContent = document.getElementById('post-content');
+    const aiSummary = document.getElementById('ai-summary');
+    const aiResolution = document.getElementById('ai-resolution');
+    const deeperAnalysisResult = document.getElementById('deeper-analysis-result');
+    const labelsContainer = document.getElementById('labels-container');
+    const finalOutput = document.getElementById('final-output');
     const settingsLink = document.getElementById('settings-link');
     const openInTabButton = document.getElementById('open-in-tab-button');
-    const deeperAnalysisButton = document.getElementById('deeper-analysis-button');
-    const deeperAnalysisResult = document.getElementById('deeper-analysis-result');
-
-    const chatLog = document.getElementById('chat-log');
     const chatInput = document.getElementById('chat-input');
     const chatSendButton = document.getElementById('chat-send-button');
+    const chatLog = document.getElementById('chat-log');
     
-    // --- State ---
-    let username = 'Unknown User';
-    let analysisResult = {};
-    let chatHistory = [];
-    let mediaUrl = '';
+    let currentAnalysis = {}; // Store the latest analysis
+    let chatHistory = []; // Store the conversation history
 
-    // --- Core Functions ---
-    const getUsername = async () => {
-        const { settings } = await chrome.storage.local.get('settings');
-        if (settings && settings.username) {
-            username = settings.username;
+    // --- Initial State & Page Scan ---
+    async function initialize() {
+        setLoadingState(true, 'Scanning page...');
+        try {
+            const activeTab = await getActiveTab();
+            if (activeTab && (activeTab.url.includes('facebook.com') || activeTab.url.includes('x.com') || activeTab.url.includes('review-page'))) { // TODO: Make this configurable
+                const response = await chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id });
+                if (response && response.content) {
+                    postContent.value = response.content.adText;
+                } else {
+                    postContent.value = 'Could not automatically scan content. Please paste it manually.';
+                }
+            } else {
+                postContent.value = 'Switch to a supported page (Facebook, X) to scan content automatically.';
+                analyzeButton.disabled = true;
+            }
+        } catch (error) {
+            console.error('Error during initialization:', error);
+            postContent.value = `Error: ${error.message}`;
+        } finally {
+            setLoadingState(false);
         }
-    };
+    }
+    
+    // --- Event Listeners ---
+    
+    analyzeButton.addEventListener('click', async () => {
+        setLoadingState(true, 'Analyzing...');
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'analyze',
+                content: postContent.value,
+                mediaUrl: '' // TODO: Extract media URL if possible from scanner
+            });
+            handleAnalysisResponse(response);
+        } catch (error) {
+            handleError(error, 'Analysis failed');
+        } finally {
+            setLoadingState(false);
+        }
+    });
 
-    const updateFinalOutput = () => {
-        const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked')).map(cb => cb.value);
-        const violationReason = analysisResult.resolution || '';
-        const date = new Date();
-        const formattedDate = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-        
-        finalOutput.value = `${selectedLabels.join(', ')} - ${violationReason} - ${username} - ${formattedDate}`;
-    };
+    deeperAnalysisButton.addEventListener('click', async () => {
+        setLoadingState(true, 'Getting deeper analysis...');
+        deeperAnalysisResult.style.display = 'block';
+        deeperAnalysisResult.textContent = 'Fetching...';
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'deeperAnalysis',
+                content: postContent.value,
+                mediaUrl: '' // TODO
+            });
+            if (response.error) {
+                deeperAnalysisResult.textContent = `Error: ${response.error}`;
+            } else {
+                deeperAnalysisResult.textContent = response.deeperAnalysis;
+            }
+        } catch (error) {
+            handleError(error, 'Deeper analysis failed');
+        } finally {
+            setLoadingState(false);
+        }
+    });
 
-    const populateAllLabels = (labels) => {
-        labelsContainer.innerHTML = '';
-        if (!labels || labels.length === 0) {
-            labelsContainer.innerHTML = '<div>No labels found. Check settings.</div>';
+    copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(finalOutput.value)
+            .then(() => showToast('Copied to clipboard!'))
+            .catch(err => handleError(err, 'Failed to copy'));
+    });
+    
+    submitButton.addEventListener('click', async () => {
+        // This will be re-implemented later based on settings
+        showToast('Submit to Sheet clicked. No action configured yet.');
+    });
+
+    chatSendButton.addEventListener('click', handleChat);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleChat();
+    });
+
+    openInTabButton.addEventListener('click', () => {
+        chrome.tabs.create({ url: 'popup.html' });
+    });
+
+    // --- UI Update Functions ---
+
+    function setLoadingState(isLoading, message = '') {
+        analyzeButton.disabled = isLoading;
+        analyzeButton.textContent = isLoading ? message : 'Analyze Page';
+        deeperAnalysisButton.disabled = isLoading;
+    }
+
+    function handleAnalysisResponse(response) {
+        if (response.error) {
+            handleError(new Error(response.error), 'Analysis Error');
             return;
         }
-        labels.forEach(labelObj => {
-            const label = labelObj.name;
-            const wrapper = document.createElement('div');
-            wrapper.className = 'checkbox-wrapper';
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `label-${label.replace(/\s+/g, '-')}`;
-            checkbox.value = label;
-            checkbox.addEventListener('change', updateFinalOutput);
-            
-            const labelEl = document.createElement('label');
-            labelEl.setAttribute('for', checkbox.id);
-            labelEl.textContent = label;
-            
-            wrapper.appendChild(checkbox);
-            wrapper.appendChild(labelEl);
-            labelsContainer.appendChild(wrapper);
-        });
-    };
-
-    const displayAnalysis = (result) => {
-        analysisResult = result;
-        aiSummary.value = result.summary || '';
-        aiResolution.value = result.resolution || '';
-
-        // Highlight suggested labels
-        const allWrappers = labelsContainer.querySelectorAll('.checkbox-wrapper');
-        allWrappers.forEach(wrapper => {
-            const checkbox = wrapper.querySelector('input');
-            if ((result.suggestedLabels || []).includes(checkbox.value)) {
-                wrapper.classList.add('highlighted');
-                checkbox.checked = true;
-            } else {
-                wrapper.classList.remove('highlighted');
-                checkbox.checked = false;
-            }
-        });
-        updateFinalOutput();
-    };
-
-    const appendToChatLog = (message, sender = 'user') => {
-        const messageEl = document.createElement('div');
-        messageEl.className = `chat-message ${sender}`;
-        messageEl.textContent = message;
-        chatLog.appendChild(messageEl);
-        chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to bottom
-    };
-    
-    // --- Event Handlers ---
-    const handleAnalysisClick = async () => {
-        const content = postContent.value.trim();
-        if (!content) return;
+        currentAnalysis = response;
+        aiSummary.textContent = response.summary || 'No summary provided.';
+        aiResolution.textContent = response.resolution || 'No resolution provided.';
         
-        analyzeButton.disabled = true;
-        analyzeButton.textContent = 'Analyzing...';
-        
-        try {
-            const labelsResponse = await chrome.runtime.sendMessage({ action: 'getLabels' });
-            const rules = (labelsResponse.data || []).map(l => l.name).join(', ');
-            const result = await chrome.runtime.sendMessage({ action: 'analyze', content, mediaUrl, rules });
-            if (result.error) throw new Error(result.error);
-            displayAnalysis(result);
-        } catch (error) {
-            aiResolution.value = `Error: ${error.message}`;
-        } finally {
-            analyzeButton.disabled = false;
-            analyzeButton.textContent = 'Analyze';
-        }
-    };
+        populateLabels(response.suggestedLabels || []);
 
-    const handleDeeperAnalysisClick = async () => {
-        const content = postContent.value.trim();
-        if (!content) return;
+        // Add the initial analysis to the chat history as the AI's first turn
+        chatHistory = [{ role: 'assistant', content: `Initial analysis complete. Summary: ${response.summary}. Resolution: ${response.resolution}` }];
+        updateChatLog();
+    }
 
-        deeperAnalysisButton.disabled = true;
-        deeperAnalysisButton.textContent = 'Analyzing...';
-        deeperAnalysisResult.style.display = 'block';
-        deeperAnalysisResult.value = 'Generating deeper analysis...';
-
-        try {
-            const response = await chrome.runtime.sendMessage({ action: 'deeperAnalysis', content, mediaUrl });
-            if (response.error) {
-                throw new Error(response.error);
+    function populateLabels(suggestedLabels) {
+        labelsContainer.innerHTML = ''; // Clear previous labels
+        chrome.storage.local.get(['labelsCache'], (result) => {
+            const allLabels = result.labelsCache?.labels || [];
+            if (allLabels.length === 0) {
+                labelsContainer.innerHTML = '<p>No labels found. Check Google Sheet settings.</p>';
+                return;
             }
-            deeperAnalysisResult.value = response.deeperAnalysis;
-        } catch (error) {
-            deeperAnalysisResult.value = `Error: ${error.message}`;
-        } finally {
-            deeperAnalysisButton.disabled = false;
-            deeperAnalysisButton.textContent = 'Get Deeper Analysis';
-        }
-    };
+            allLabels.forEach(label => {
+                const isSuggested = suggestedLabels.includes(label.name);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'checkbox-wrapper';
+                if (isSuggested) {
+                    wrapper.classList.add('highlighted');
+                }
+                wrapper.innerHTML = `
+                    <input type="checkbox" id="label-${label.name}" name="${label.name}" ${isSuggested ? 'checked' : ''}>
+                    <label for="label-${label.name}">${label.name}</label>
+                `;
+                labelsContainer.appendChild(wrapper);
+            });
+        });
+    }
 
-    const handleChatSend = async () => {
+    async function handleChat() {
         const message = chatInput.value.trim();
         if (!message) return;
 
-        appendToChatLog(message, 'user');
         chatHistory.push({ role: 'user', content: message });
+        updateChatLog();
         chatInput.value = '';
-        chatSendButton.disabled = true;
+        setLoadingState(true, 'AI is thinking...');
 
         try {
-            // Include the original analysis in the history for better context
-            const fullHistory = [
-                { role: 'system', content: `Original post for analysis: "${postContent.value}"` },
-                { role: 'system', content: `Initial analysis summary: "${aiSummary.value}"` },
-                { role: 'system', content: `Initial analysis resolution: "${aiResolution.value}"` },
-                ...chatHistory
-            ];
-            const response = await chrome.runtime.sendMessage({ action: 'chat', message, history: fullHistory });
+            const activeTab = await getActiveTab();
+            const response = await chrome.runtime.sendMessage({
+                action: 'chat',
+                message: message,
+                history: chatHistory,
+                tabId: activeTab.id // Pass tabId for NBM trigger
+            });
             if (response.error) {
-                throw new Error(response.error);
+                handleError(new Error(response.error), 'Chat Error');
+            } else {
+                chatHistory.push({ role: 'assistant', content: response.reply });
+                updateChatLog();
             }
-            const aiReply = response.reply; // The reply is now a direct string
-            appendToChatLog(aiReply, 'ai');
-            chatHistory.push({ role: 'assistant', content: aiReply });
         } catch (error) {
-            appendToChatLog(`Error: ${error.message}`, 'ai');
+            handleError(error, 'Chat failed');
         } finally {
-            chatSendButton.disabled = false;
+            setLoadingState(false);
         }
-    };
+    }
 
-    const handleSubmitClick = async () => {
-        const output = finalOutput.value;
-        if (!output) return;
-
-        submitButton.disabled = true;
-        submitButton.textContent = 'Submitting...';
-
-        try {
-            // The data should be an array of columns for the sheet
-            const data = output.split(' - '); 
-            const response = await chrome.runtime.sendMessage({ action: 'writeToSheet', data });
-            if (response.error) {
-                throw new Error(response.error);
+    function updateChatLog() {
+        chatLog.innerHTML = '';
+        chatHistory.forEach(msg => {
+            const msgElement = document.createElement('div');
+            msgElement.className = `chat-message ${msg.role}`;
+            
+            // Handle both string and object replies (for NBM)
+            if (typeof msg.content === 'object') {
+                msgElement.innerHTML = `<pre>${JSON.stringify(msg.content, null, 2)}</pre>`;
+            } else {
+                msgElement.textContent = msg.content;
             }
-            // Maybe show a temporary success message
-            submitButton.textContent = 'Success!';
-            setTimeout(() => {
-                submitButton.textContent = 'Submit to Sheet';
-            }, 2000);
 
-        } catch (error) {
-            // Display error near the button or in a status element
-            console.error('Failed to submit to sheet:', error);
-            submitButton.textContent = 'Error!';
-        } finally {
-            submitButton.disabled = false;
-        }
-    };
+            chatLog.appendChild(msgElement);
+        });
+        chatLog.scrollTop = chatLog.scrollHeight; // Scroll to bottom
+    }
 
-    const handleCopyClick = () => {
-        finalOutput.select();
-        document.execCommand('copy');
-    };
+    function handleError(error, context) {
+        console.error(`[${context}]`, error);
+        // A more user-friendly error display could be implemented here
+        showToast(`Error: ${context} - ${error.message}`, 'error');
+        aiSummary.textContent = `Error during ${context.toLowerCase()}: ${error.message}`;
+    }
 
-    // --- Initialization ---
-    const initialize = async () => {
-        await getUsername();
-        
-        // Fetch labels
-        try {
-            const labelsResponse = await chrome.runtime.sendMessage({ action: 'getLabels' });
-            if (labelsResponse.error) throw new Error(labelsResponse.error);
-            populateAllLabels(labelsResponse.data);
-        } catch (error) {
-            labelsContainer.innerHTML = `<div>Error loading labels: ${error.message}</div>`;
-        }
+    function showToast(message, type = 'success') {
+        // A toast/notification could be implemented here for better UX
+        console.log(`[Toast: ${type}] ${message}`);
+    }
 
-        // Scan page and auto-analyze
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab && tab.url && !tab.url.startsWith('chrome://')) {
-                const results = await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    files: ['content-scanner.js'],
-                });
-                if (results && results[0] && results[0].result) {
-                    const result = results[0].result;
-                    postContent.value = result.adText;
-                    mediaUrl = result.mediaUrl;
-                    // Automatically trigger analysis after scanning
-                    handleAnalysisClick();
-                }
-            }
-        } catch (e) {
-            postContent.placeholder = "Could not scan page. Paste content here.";
-        }
-    };
-
-    analyzeButton.addEventListener('click', handleAnalysisClick);
-    copyButton.addEventListener('click', handleCopyClick);
-    submitButton.addEventListener('click', handleSubmitClick);
-    chatSendButton.addEventListener('click', handleChatSend);
-    chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            handleChatSend();
-        }
-    });
-    settingsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        chrome.runtime.openOptionsPage();
-    });
-    deeperAnalysisButton.addEventListener('click', handleDeeperAnalysisClick);
-    openInTabButton.addEventListener('click', () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
-    });
+    function getActiveTab() {
+        return new Promise((resolve) => {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                resolve(tabs[0]);
+            });
+        });
+    }
 
     initialize();
 }); 

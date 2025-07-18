@@ -231,17 +231,49 @@ Do not include any other text or formatting before or after the JSON object.
 // --- AI API Call Implementations ---
 
 async function callGoogleGenerativeAI(prompt, expectJson = true) {
-    // This function would use chrome.identity to get a token and then call the Gemini API
-    // Placeholder for actual implementation
-    console.log(`Calling Gemini (expectJson=${expectJson})...`);
-    if (expectJson) {
-        return { 
-          summary: "This is a placeholder summary from the Gemini model.",
-          resolution: 'Placeholder violation reason.', 
-          suggestedLabels: ['Default Label 1'] 
-        };
+    const token = await new Promise((resolve, reject) => {
+        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+            } else {
+                resolve(token);
+            }
+        });
+    });
+
+    const model = expectJson ? 'gemini-pro' : 'gemini-pro-vision'; // Vision model for non-JSON multimodal
+    const body = {
+        contents: [{
+            parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+            response_mime_type: expectJson ? "application/json" : "text/plain",
+        }
+    };
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.json();
+        console.error('Google AI API Error:', errorBody);
+        throw new Error(`Google AI API error: ${errorBody.error?.message || response.statusText}`);
     }
-    return { resolution: "This is a placeholder chat reply from the Gemini model." };
+
+    const data = await response.json();
+    const content = data.candidates[0].content.parts[0].text;
+    console.log('Raw Google AI Response content:', content);
+    
+    if (expectJson) {
+        return extractAndParseJson(content);
+    }
+    return content;
 }
 
 async function callOpenAI(prompt, apiKey) {

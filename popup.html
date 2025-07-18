@@ -11,47 +11,47 @@
             <h1>Xrefhub</h1>
             <div class="header-actions">
                 <button id="open-in-tab-button" class="btn-icon" title="Open in New Tab">↗️</button>
-                <a href="#" id="settings-link" class="btn-icon" title="Settings">⚙️</a>
+                <a href="settings.html" id="settings-link" class="btn-icon" title="Settings" target="_blank">⚙️</a>
             </div>
         </header>
         <main>
-            <div class="input-group">
-                <label for="post-content">Post Content</label>
-                <textarea id="post-content" rows="4" placeholder="Scanning for content..."></textarea>
+            <div class="card">
+                <h2 class="card-header">Post Content</h2>
+                <textarea id="post-content" rows="4" placeholder="Scanning page for content..."></textarea>
+                <button id="analyze-button" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Analyze Page</button>
             </div>
 
-            <div class="input-group">
-                <label for="ai-summary">AI Context and Intent Summary</label>
-                <textarea id="ai-summary" class="textarea-field" rows="4" readonly></textarea>
-                <button id="deeper-analysis-button" class="btn btn-secondary">Get Deeper Analysis</button>
-                <textarea id="deeper-analysis-result" class="textarea-field" rows="8" readonly style="display: none; margin-top: 10px;"></textarea>
+            <div class="card">
+                <h2 class="card-header">AI Analysis</h2>
+                
+                <strong>Summary & Intent:</strong>
+                <div id="ai-summary" class="readonly-field">Awaiting analysis...</div>
+
+                <strong style="margin-top: 1rem; display: block;">Policy Resolution:</strong>
+                <div id="ai-resolution" class="readonly-field">Awaiting analysis...</div>
+                
+                <button id="deeper-analysis-button" class="btn btn-secondary" style="margin-top: 1rem;">Get Deeper Analysis</button>
+                <div id="deeper-analysis-result" class="readonly-field" style="display: none; margin-top: 1rem;"></div>
             </div>
             
-            <div class="input-group">
-                <label>Labels</label>
+            <div class="card">
+                <h2 class="card-header">Labels</h2>
                 <div id="labels-container" class="labels-container">
                     <!-- Checkboxes will be populated here -->
+                    <p>No labels loaded. Run analysis.</p>
                 </div>
             </div>
 
-            <div class="input-group">
-                <label for="ai-resolution">AI Resolution</label>
-                <textarea id="ai-resolution" rows="2" readonly></textarea>
-            </div>
-
-            <div class="input-group">
-                <label for="final-output">Final Formatted Output</label>
-                <textarea id="final-output" rows="3" readonly></textarea>
+            <div class="card">
+                <h2 class="card-header">Final Output</h2>
+                <textarea id="final-output" rows="3" readonly placeholder="Final output will appear here after submission is configured."></textarea>
             </div>
 
         </main>
         <footer>
             <div class="button-container">
-                <button id="analyze-button" class="action-button">Analyze</button>
-                <div class="output-actions">
-                    <button id="copy-button" class="btn">Copy</button>
-                    <button id="submit-button" class="btn btn-primary">Submit to Sheet</button>
-                </div>
+                <button id="copy-button" class="btn">Copy Output</button>
+                <button id="submit-button" class="btn btn-primary">Submit to Sheet</button>
             </div>
         </footer>
     </div>
@@ -59,8 +59,8 @@
     <div class="chat-container">
         <div id="chat-log" class="chat-log"></div>
         <div class="chat-input-area">
-            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a follow-up question...">
-            <button id="chat-send-button" class="btn">Send</button>
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a follow-up or type 'NBM'...">
+            <button id="chat-send-button" class="btn btn-primary">Send</button>
         </div>
     </div>
 
