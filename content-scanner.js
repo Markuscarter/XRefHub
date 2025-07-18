@@ -3,36 +3,9 @@
  * It returns an object containing multiple fields with enhanced review page support.
  */
 
-function getPostContent() {
-    const adText = document.body.innerText;
-    let mediaUrl = '';
-
-    // Try to find the main image (works for many sites)
-    const mainImage = document.querySelector('meta[property="og:image"]');
-    if (mainImage) {
-        mediaUrl = mainImage.content;
-    } else {
-        // Fallback for sites that use a different structure (e.g., Twitter)
-        const twitterImage = document.querySelector('meta[name="twitter:image"]');
-        if (twitterImage) {
-            mediaUrl = twitterImage.content;
-        }
-    }
-
-    // Try to find the main video
-    const mainVideo = document.querySelector('meta[property="og:video"]');
-    if (mainVideo) {
-        mediaUrl = mainVideo.content;
-    }
-
-    return {
-        adText,
-        mediaUrl,
-    };
-}
-
-(() => {
-    console.log('[Xrefhub Scanner] Starting enhanced structured data scan on:', window.location.href);
+// A more robust, single-function structure for content scanning.
+(async () => {
+    console.log('[Xrefhub Scanner] Starting enhanced scan...');
 
     const result = {
         postId: 'Not found',
@@ -40,7 +13,6 @@ function getPostContent() {
         landingUrl: 'Not found',
         pageUrl: window.location.href,
         extractedAt: new Date().toLocaleString(),
-        // Enhanced fields for review pages
         reviewContext: {},
         formData: {},
         statusIndicators: {},
@@ -49,209 +21,170 @@ function getPostContent() {
         metadata: {}
     };
 
-    // --- Strategy for Post ID (from URL) ---
     try {
-        const urlParts = window.location.pathname.split('/');
-        const statusIndex = urlParts.indexOf('status');
-        if (statusIndex > -1 && urlParts[statusIndex + 1]) {
-            result.postId = urlParts[statusIndex + 1];
+        // --- Ad Text & Core Content ---
+        const tweetTextElement = document.querySelector('[data-testid="tweetText"]');
+        if (tweetTextElement && tweetTextElement.innerText) {
+            result.adText = tweetTextElement.innerText.trim();
+            const linkElement = tweetTextElement.querySelector('a');
+            if (linkElement && linkElement.href) result.landingUrl = linkElement.href;
+        } else {
+            const article = document.querySelector('article');
+            if (article && article.innerText) {
+                result.adText = article.innerText.trim();
+                const linkInArticle = article.querySelector('a');
+                if (linkInArticle && linkInArticle.href) result.landingUrl = linkInArticle.href;
+            }
         }
-    } catch (e) {
-        console.warn('[Xrefhub Scanner] Could not parse Post ID from URL.');
-    }
 
-    // --- Enhanced Strategy for Ad Text ---
-    const tweetTextElement = document.querySelector('[data-testid="tweetText"]');
-    if (tweetTextElement && tweetTextElement.innerText) {
-        result.adText = tweetTextElement.innerText.trim();
-        
-        // --- Strategy for Landing URL (finds first link in the post) ---
-        const linkElement = tweetTextElement.querySelector('a');
-        if (linkElement && linkElement.href) {
-            result.landingUrl = linkElement.href;
-        }
-    } else {
-         const article = document.querySelector('article');
-         if (article && article.innerText) {
-             result.adText = article.innerText.trim();
-             const linkInArticle = article.querySelector('a');
-             if (linkInArticle && linkInArticle.href) {
-                result.landingUrl = linkInArticle.href;
-             }
-         }
-    }
-    
-    // --- Enhanced Review Page Context Extraction ---
-    
-    // Extract review-specific labels and status indicators
-    const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
-    statusElements.forEach((el, index) => {
-        const text = el.innerText.trim();
-        const className = el.className;
-        if (text && text.length < 100) {
-            result.statusIndicators[`status_${index}`] = {
-                text: text,
-                className: className,
-                element: el.tagName.toLowerCase()
-            };
-        }
-    });
+        // --- All other data extraction logic from the original file ---
+        // (This includes statusIndicators, formData, tables, buttons, metadata, etc.)
 
-    // Extract form data and inputs
-    const formInputs = document.querySelectorAll('input, select, textarea, button');
-    formInputs.forEach((input, index) => {
-        const type = input.type || input.tagName.toLowerCase();
-        const value = input.value || input.innerText || input.placeholder || input.name || input.id || `input_${index}`;
-        
-        if (value) {
-            result.formData[value] = {
-                type: type,
-                value: value,
-                placeholder: input.placeholder,
-                element: input.tagName.toLowerCase()
-            };
-        }
-    });
+        const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
+        statusElements.forEach((el, index) => {
+            const text = el.innerText.trim();
+            if (text && text.length < 100) result.statusIndicators[`status_${index}`] = { text, className: el.className, element: el.tagName.toLowerCase() };
+        });
 
-    // Extract table data
-    const tables = document.querySelectorAll('table');
-    tables.forEach((table, tableIndex) => {
-        const tableData = [];
-        const rows = table.querySelectorAll('tr');
-        rows.forEach((row, rowIndex) => {
-            const cells = row.querySelectorAll('td, th');
-            const rowData = [];
-            cells.forEach((cell, cellIndex) => {
-                rowData.push({
-                    text: cell.innerText.trim(),
-                    isHeader: cell.tagName.toLowerCase() === 'th'
+        const formInputs = document.querySelectorAll('input, select, textarea, button');
+        formInputs.forEach((input, index) => {
+            const type = input.type || input.tagName.toLowerCase();
+            const name = input.name || input.id || `input_${index}`;
+            if (input.value || input.placeholder) result.formData[name] = { type, value: input.value, placeholder: input.placeholder, element: input.tagName.toLowerCase() };
+        });
+
+        const tables = document.querySelectorAll('table');
+        tables.forEach((table, tableIndex) => {
+            const tableData = [];
+            const rows = table.querySelectorAll('tr');
+            rows.forEach((row, rowIndex) => {
+                const cells = row.querySelectorAll('td, th');
+                const rowData = [];
+                cells.forEach((cell, cellIndex) => {
+                    rowData.push({
+                        text: cell.innerText.trim(),
+                        isHeader: cell.tagName.toLowerCase() === 'th'
+                    });
                 });
+                if (rowData.length > 0) {
+                    tableData.push(rowData);
+                }
             });
-            if (rowData.length > 0) {
-                tableData.push(rowData);
+            if (tableData.length > 0) {
+                result.tableData[`table_${tableIndex}`] = tableData;
             }
         });
-        if (tableData.length > 0) {
-            result.tableData[`table_${tableIndex}`] = tableData;
-        }
-    });
 
-    // Extract UI elements (buttons, dropdowns, etc.)
-    const buttons = document.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]');
-    buttons.forEach((btn, index) => {
-        const text = btn.innerText.trim();
-        const className = btn.className;
-        const disabled = btn.disabled;
-        if (text && text.length <50) {
-            result.uiElements[`button_${index}`] = {
-                text: text,
-                className: className,
-                disabled: disabled,
-                element: btn.tagName.toLowerCase()
-            };
-        }
-    });
-
-    // Extract metadata and structured data
-    const metaTags = document.querySelectorAll('meta');
-    metaTags.forEach((meta) => {
-        const name = meta.getAttribute('name') || meta.getAttribute('property') || meta.getAttribute('itemprop');
-        const content = meta.getAttribute('content');
-        if (name && content) {
-            result.metadata[name] = content;
-        }
-    });
-
-    // Extract JSON-LD structured data
-    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-    jsonLdScripts.forEach((script, index) => {
-        try {
-            const jsonData = JSON.parse(script.innerText);
-            result.metadata[`jsonLd_${index}`] = jsonData;
-        } catch (e) {
-            console.warn('[Xrefhub Scanner] Could not parse JSON-LD data');
-        }
-    });
-
-    // Extract review-specific context (common patterns)
-    const reviewContext = {};
-    
-    // Helper function to find text in the next sibling element after a heading
-    function findContentAfterHeading(keywords) {
-        for (const tag of ['h1', 'h2', 'h3', 'h4', 'strong', 'b']) {
-            for (const el of document.querySelectorAll(tag)) {
-                const headingText = el.innerText.toLowerCase();
-                if (keywords.some(k => headingText.includes(k))) {
-                    // Found a heading, now find the content in the next element
-                    let nextEl = el.nextElementSibling;
-                    // Skip over non-content elements if necessary
-                    while (nextEl && (nextEl.tagName === 'BR' || nextEl.children.length > 0)) {
-                        nextEl = nextEl.nextElementSibling;
-                    }
-                    if (nextEl && nextEl.innerText) {
-                        return nextEl.innerText.trim();
-                    }
-                }
-            }
-        }
-        return null;
-    }
-    
-    // --- NEW: More specific contextual extraction ---
-    reviewContext.agentNotes = findContentAfterHeading(['notes', 'comments', 'feedback', 'review history']);
-    reviewContext.targetingInfo = findContentAfterHeading(['targeting', 'audience', 'location', 'market']);
-    reviewContext.userBio = findContentAfterHeading(['about the user', 'user profile', 'bio']);
-    
-    // Find existing labels more explicitly
-    const existingLabels = [];
-    const labelsContainerText = findContentAfterHeading(['existing labels', 'current tags', 'labels applied']);
-    if (labelsContainerText) {
-        existingLabels.push(...labelsContainerText.split('\n').filter(l => l.trim() !== ''));
-    }
-    reviewContext.existingLabels = existingLabels;
-
-
-    // Look for common review page patterns
-    const reviewKeywords = ['review', 'approve', 'reject', 'pending', 'proved', 'rejected', 'escalate', 'risk', 'violation'];
-    reviewKeywords.forEach(keyword => {
-        const elements = document.querySelectorAll(`[class*="${keyword}"],id*="${keyword}", data-*="${keyword}"`);
-        elements.forEach((el, index) => {
-            const text = el.innerText.trim();
-            if (text && text.length < 200) {
-                reviewContext[`${keyword}_${index}`] = {
+        const buttons = document.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]');
+        buttons.forEach((btn, index) => {
+            const text = btn.innerText.trim();
+            const className = btn.className;
+            const disabled = btn.disabled;
+            if (text && text.length <50) {
+                result.uiElements[`button_${index}`] = {
                     text: text,
-                    element: el.tagName.toLowerCase(),
-                    className: el.className
+                    className: className,
+                    disabled: disabled,
+                    element: btn.tagName.toLowerCase()
                 };
             }
         });
-    });
 
-    // Look for specific review page indicators
-    const reviewIndicators = {
-        approval_status: document.querySelector('[class*="approved"], [class*="rejected"], [class*="pending"]'),
-        risk_level: document.querySelector('[class*="risk"], [class*="danger"], [class*="warning"]'),
-        reviewer_info: document.querySelector('[class*="reviewer"], [class*="moderator"], [class*="admin"]'),
-        timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'),
-        escalation: document.querySelector('[class*="escalate"], [class*="flag"], [class*="report"]')
-    };
+        const metaTags = document.querySelectorAll('meta');
+        metaTags.forEach((meta) => {
+            const name = meta.getAttribute('name') || meta.getAttribute('property') || meta.getAttribute('itemprop');
+            const content = meta.getAttribute('content');
+            if (name && content) {
+                result.metadata[name] = content;
+            }
+        });
 
-    Object.entries(reviewIndicators).forEach(([key, element]) => {
-        if (element) {
-            reviewContext[key] = {
-                text: element.innerText.trim(),
-                element: element.tagName.toLowerCase(),
-                className: element.className
-            };
+        const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+        jsonLdScripts.forEach((script, index) => {
+            try {
+                const jsonData = JSON.parse(script.innerText);
+                result.metadata[`jsonLd_${index}`] = jsonData;
+            } catch (e) {
+                console.warn('[Xrefhub Scanner] Could not parse JSON-LD data');
+            }
+        });
+
+        function findContentAfterHeading(keywords) {
+            for (const tag of ['h1', 'h2', 'h3', 'h4', 'strong', 'b']) {
+                for (const el of document.querySelectorAll(tag)) {
+                    const headingText = el.innerText.toLowerCase();
+                    if (keywords.some(k => headingText.includes(k))) {
+                        let nextEl = el.nextElementSibling;
+                        while (nextEl && (nextEl.tagName === 'BR' || nextEl.children.length > 0)) {
+                            nextEl = nextEl.nextElementSibling;
+                        }
+                        if (nextEl && nextEl.innerText) return nextEl.innerText.trim();
+                    }
+                }
+            }
+            return null;
         }
-    });
 
-    result.reviewContext = reviewContext;
+        result.reviewContext.agentNotes = findContentAfterHeading(['notes', 'comments', 'feedback', 'review history']);
+        result.reviewContext.targetingInfo = findContentAfterHeading(['targeting', 'audience', 'location', 'market']);
+        result.reviewContext.userBio = findContentAfterHeading(['about the user', 'user profile', 'bio']);
+        
+        const labelsContainerText = findContentAfterHeading(['existing labels', 'current tags', 'labels applied']);
+        if (labelsContainerText) {
+            result.reviewContext.existingLabels = labelsContainerText.split('\n').filter(l => l.trim() !== '');
+        }
 
-    if (result.adText === 'Not found') {
-        console.error('[Xrefhub Scanner] Could not extract post text.');
+        // Look for common review page patterns
+        const reviewKeywords = ['review', 'approve', 'reject', 'pending', 'proved', 'rejected', 'escalate', 'risk', 'violation'];
+        reviewKeywords.forEach(keyword => {
+            const elements = document.querySelectorAll(`[class*="${keyword}"],id*="${keyword}", data-*="${keyword}"`);
+            elements.forEach((el, index) => {
+                const text = el.innerText.trim();
+                if (text && text.length < 200) {
+                    result.reviewContext[`${keyword}_${index}`] = {
+                        text: text,
+                        element: el.tagName.toLowerCase(),
+                        className: el.className
+                    };
+                }
+            });
+        });
+
+        // Look for specific review page indicators
+        const reviewIndicators = {
+            approval_status: document.querySelector('[class*="approved"], [class*="rejected"], [class*="pending"]'),
+            risk_level: document.querySelector('[class*="risk"], [class*="danger"], [class*="warning"]'),
+            reviewer_info: document.querySelector('[class*="reviewer"], [class*="moderator"], [class*="admin"]'),
+            timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'),
+            escalation: document.querySelector('[class*="escalate"], [class*="flag"], [class*="report"]')
+        };
+
+        Object.entries(reviewIndicators).forEach(([key, element]) => {
+            if (element) {
+                result.reviewContext[key] = {
+                    text: element.innerText.trim(),
+                    element: element.tagName.toLowerCase(),
+                    className: element.className
+                };
+            }
+        });
+
+        // --- Strategy for Post ID (from URL) ---
+        try {
+            const urlParts = window.location.pathname.split('/');
+            const statusIndex = urlParts.indexOf('status');
+            if (statusIndex > -1 && urlParts[statusIndex + 1]) {
+                result.postId = urlParts[statusIndex + 1];
+            }
+        } catch (e) {
+            console.warn('[Xrefhub Scanner] Could not parse Post ID from URL.');
+        }
+
+        console.log('[Xrefhub Scanner] Scan complete.', result);
+        return result;
+
+    } catch (error) {
+        console.error('[Xrefhub Scanner] A critical error occurred during scanning:', error);
+        return { error: `Scanner failed: ${error.message}`, adText: 'Error during scan.' };
     }
-
-    console.log('[Xrefhub Scanner] Enhanced scan complete. Returning comprehensive data:', result);
-    return result;
 })(); 
