@@ -150,7 +150,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // Check if message is "NBM" trigger
                 if (request.message.trim().toUpperCase() === 'NBM') {
                     // Get current page content for NBM analysis
-                    const content = await scanPage(request.tabId);
+                    const scanResult = await scanPage(request.tabId);
                     const labelsData = await getLabelsFromSheet();
                     let rules = labelsData.map(label => `- ${label.name}`).join('\n');
                     
@@ -165,10 +165,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         console.log('Using sheet rules only for NBM (Drive not available):', error.message);
                     }
                     
-                    // Get review page context if available (you can enhance this later)
-                    const reviewPageContext = null; // TODO: Extract review page context
-                    
-                    const nbmResult = await getNBMResponse(content, null, rules, reviewPageContext);
+                    // Pass the full scan result as the review page context
+                    const nbmResult = await getNBMResponse(scanResult.adText, scanResult.mediaUrl, rules, scanResult);
                     sendResponse({ reply: nbmResult });
                 } else {
                     const reply = await getChatReply(request.message, request.history);

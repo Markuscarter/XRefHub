@@ -28,9 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true, 'Scanning page...');
         try {
             const activeTab = await getActiveTab();
-            if (activeTab && (activeTab.url.includes('facebook.com') || activeTab.url.includes('x.com') || activeTab.url.includes('review-page'))) { // TODO: Make this configurable
+            // Expanded the list of URLs for better detection
+            const supportedUrls = ['facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'reddit.com'];
+            if (activeTab && (supportedUrls.some(url => activeTab.url.includes(url)) || activeTab.url.includes('review-page'))) { // TODO: Make this configurable
                 const response = await chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id });
-                if (response && response.content) {
+                if (response && response.content && response.content.adText) {
                     postContent.value = response.content.adText;
                 } else {
                     postContent.value = 'Could not automatically scan content. Please paste it manually.';

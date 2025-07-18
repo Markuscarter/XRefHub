@@ -96,7 +96,7 @@ export async function getDeeperAnalysis(postContent, mediaUrl, rules) {
     try {
         if (provider === 'gemini') {
             const result = await callGoogleGenerativeAI(prompt, false);
-            return result.resolution;
+            return result; // Return the full text content
         } else if (provider === 'chatgpt') {
             if (!apiKey) throw new Error('ChatGPT API key not set.');
             return await callOpenAIWithMessages([{ role: "user", content: prompt }], apiKey, false);
@@ -151,17 +151,8 @@ export async function getNBMResponse(postContent, mediaUrl, rules, reviewPageCon
     const provider = await getAiProvider();
     const apiKey = await getApiKey(provider);
     
-    // Parse review page context if it's a string (JSON)
-    let parsedReviewContext = null;
-    if (reviewPageContext && typeof reviewPageContext === 'string') {
-        try {
-            parsedReviewContext = JSON.parse(reviewPageContext);
-        } catch (e) {
-            console.warn('Could not parse review page context JSON');
-        }
-    } else if (reviewPageContext) {
-        parsedReviewContext = reviewPageContext;
-    }
+    // The scan result is an object, not a string. No need for JSON.parse.
+    let parsedReviewContext = reviewPageContext;
     
     // Build review context summary
     let reviewContextSummary = '';
