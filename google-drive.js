@@ -96,8 +96,10 @@ async function getRuleFileContent(fileId) {
       
       // Combine text content with image descriptions
       const fullContent = textContent + imageDescriptions;
-      console.log(`Successfully extracted HTML content with ${images.length} images for file ID ${fileId}`);
-      return fullContent;
+      // Clean up whitespace and normalize the text for better AI processing
+      const cleanedContent = fullContent.replace(/\s+/g, ' ').trim();
+      console.log(`Successfully extracted and cleaned HTML content with ${images.length} images for file ID ${fileId}`);
+      return cleanedContent;
     }
     
     // Fallback to plain text if HTML export fails
@@ -108,8 +110,9 @@ async function getRuleFileContent(fileId) {
     
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
     const textContent = await response.text();
-    console.log(`Successfully extracted plain text content for file ID ${fileId}`);
-    return textContent;
+    const cleanedText = textContent.replace(/\s+/g, ' ').trim();
+    console.log(`Successfully extracted and cleaned plain text content for file ID ${fileId}`);
+    return cleanedText;
     
   } catch (error) {
     console.error(`Error fetching content for file ID ${fileId}:`, error);
@@ -151,7 +154,7 @@ export async function fetchAllRules() {
     for (const file of data.files) {
       const content = await getRuleFileContent(file.id);
       if (content) {
-        allRulesContent += `--- Policy: ${file.name} ---\n${content}\n\n`;
+        allRulesContent += `<policy_document name="${file.name}">\n${content}\n</policy_document>\n\n`;
       }
     }
     console.log('Successfully fetched and concatenated all rule files.');

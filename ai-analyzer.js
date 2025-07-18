@@ -25,25 +25,30 @@ export async function analyzePost(postContent, mediaUrl, rules) {
     const apiKey = await getApiKey(provider);
     
     const prompt = `
-      Analyze the following social media post based on the provided rules.
-      You should also act as if you have knowledge of X/Twitter's advertising and promotion policies.
+      You are an Expert Content Policy Analyst. Your primary goal is to conduct a nuanced analysis of a social media post, prioritizing deep policy understanding over simple label matching.
 
-      **Rules from Google Sheet:**
+      **Source of Truth: Policy Documents**
+      The following content contains official policy documents. These are your primary source of truth.
       ${rules}
 
-      **Post Content:**
-      "${postContent}"
+      **Post to Analyze:**
+      - **Content:** "${postContent}"
+      ${mediaUrl ? `- **Media URL:** ${mediaUrl}` : ''}
 
-      ${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+      **Your Reasoning Process (Follow these steps):**
+      1.  **Identify Core Issue:** First, identify the central theme or potential violation in the post (e.g., "The post appears to be promoting a financial product," "The post contains potentially hateful imagery").
+      2.  **Find Relevant Policy:** Scour the provided <policy_document> files. Find the policy that most directly addresses the core issue. Cite the document by its "name" attribute.
+      3.  **Explain Application:** Briefly explain *why* that specific policy applies to the post. Quote or paraphrase the key phrase from the policy document that justifies your reasoning.
+      4.  **Suggest Labels:** Based on your policy analysis, suggest a list of appropriate labels. If the Sheets provides a list of labels, you can use it as a reference, but your primary justification must come from the policy documents.
+      5.  **Summarize Intent:** Briefly summarize the post's likely intent.
 
-      **Your Task:**
-      1.  **Context and Intent Summary:** Briefly summarize the post's content and its associated media (if any). Describe its likely intent (e.g., marketing, personal opinion) and the context.
-      2.  **AI Resolution:** Based on the rules and the post content, provide a concise, one-sentence explanation for why the suggested labels apply. This reason should be based on weighted reasoning of the rules. If no rules apply, state "No violation found." The entire resolution must not exceed 160 characters.
-      3.  **Suggested Labels:** Return a list of labels from the Google Sheet that apply to the post. If none apply, return an empty list.
+      **Return a single, valid JSON object** with the following keys: "summary", "resolution", "suggestedLabels", "policyDocument", "policyReasoning".
+      - "summary": The intent summary.
+      - "resolution": Your explanation of why the policy applies. This is the most important field.
+      - "suggestedLabels": The list of suggested labels.
+      - "policyDocument": The name of the most relevant policy document.
+      - "policyReasoning": The specific quote or reason from the policy document.
 
-      **Important:** The post content may contain sensitive information or API keys. Do NOT include any API keys, personal data, or sensitive strings in your response.
-
-      **Return a single, valid JSON object** with the following keys: "summary", "resolution", "suggestedLabels".
       Do not include any other text or formatting before or after the JSON object.
     `;
 
@@ -69,24 +74,23 @@ export async function getDeeperAnalysis(postContent, mediaUrl, rules) {
     const apiKey = await getApiKey(provider);
     
     const prompt = `
-      You are an expert policy analyst. A user has requested a deeper analysis of a social media post.
-      Your task is to provide a detailed breakdown of the post's context, intent, and potential policy violations.
+      You are an Expert Content Policy Analyst. A user has requested a deeper analysis of a social media post. Your task is to provide a detailed breakdown, referencing the official policy documents as your primary source of truth.
 
-      **Rules from Google Sheet:**
+      **Source of Truth: Policy Documents**
       ${rules}
 
-      **Post Content:**
-      "${postContent}"
+      **Post to Analyze:**
+      - **Content:** "${postContent}"
+      ${mediaUrl ? `- **Media URL:** ${mediaUrl}` : ''}
 
-      ${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+      **Your In-Depth Analysis (Provide a detailed, multi-paragraph explanation):**
+      1.  **Core Issue Identification:** What is the fundamental policy question at stake with this post? Go beyond surface-level descriptions.
+      2.  **Policy Deep Dive:** Identify the most relevant <policy_document>. Discuss the nuances of this policy. Are there any ambiguities or exceptions? Explain the spirit and intent behind the rule.
+      3.  **Contextual Factors:** Analyze the post's context. Who is the speaker? Who is the likely audience? What is the broader conversation it's part of? How does this context influence the policy interpretation?
+      4.  **Potential Counterarguments:** Briefly discuss any arguments for why the post might *not* violate the policy. This demonstrates a balanced and thorough analysis.
+      5.  **Final Recommendation:** Conclude with a clear recommendation and justification.
 
-      **Your Response:**
-      Provide a detailed, multi-paragraph explanation covering:
-      1.  **Nuanced Intent:** Go beyond the surface level. What is the likely underlying goal of this post? (e.g., rage-bait, astroturfing, genuine opinion, satire).
-      2.  **Potential Audience:** Who is this content likely targeting?
-      3.  **Policy Considerations:** Name specific platform policies (e.g., "Facebook's Hate Speech Policy", "X's Civic Integrity Policy") that might be relevant. Do NOT invent URLs. Explain *why* these policies may or may not apply.
-      
-      Structure your response as a single block of text.
+      Structure your response as a single block of well-formatted text. Do not invent URLs or policy names not present in the provided documents.
     `;
 
     try {
@@ -181,48 +185,31 @@ ${tableCount > 0 ? `- Table Data Available: ${tableCount} tables` : ''}`;
     }
     
     const prompt = `
-You are a Content and Ad Review Agent with access to internal policy documentation and enforcement protocols. Your role is to analyze social media posts and ads, assess policy violations, and determine the appropriate next steps for agent interaction.
+You are an Expert Content Policy Analyst and a trusted advisor for an agent's next best action. Your task is to analyze a post and the surrounding review context to recommend a clear, policy-driven next step.
 
-**Rules from Google Sheet:**
+**Source of Truth: Policy Documents**
 ${rules}
 
-**Post Content:**
-"${postContent}"
-
-${mediaUrl ? `**Associated Media URL (for context):**\n${mediaUrl}` : ''}
+**Post to Analyze:**
+- **Content:** "${postContent}"
+${mediaUrl ? `- **Media URL:** ${mediaUrl}` : ''}
 
 ${reviewContextSummary}
 
-**Your Analysis Process:**
-1. **Initial Assessment:** Analyze the post content and media for policy violations based on the provided rules. Consider context, intent, and potential audience impact.
+**Your Reasoning Process:**
+1.  **Synthesize All Information:** Review the post content, the rich context from the review page, and the official policy documents.
+2.  **Identify the Crux:** What is the single most important issue or conflict between the post and the policies?
+3.  **Determine Current State:** Based on the review context, what is the current status of this ad? (e.g., "pending initial review," "escalated for hate speech," "previously approved").
+4.  **Consult Policy for Next Steps:** Find the relevant <policy_document>. Does it contain a specific "enforcement tree" or "next step protocol"?
+5.  **Formulate Recommendation:** Based on the policy, recommend the single next best action for the human agent. Be explicit. (e.g., "Action: Escalate to the 'High-Risk Content' queue," "Action: Apply 'Financial Services' label and approve.").
 
-2. **Review Page Context Analysis:** If review page context is available, scan for additional context clues:
-   - Look for existing system labels (Quick Promote, Hate, Inappropriate, Payment Risk, Content High Risk, etc.)
-   - Identify any policy step-changing labels that require escalation
-   - Note any pre-existing enforcement actions or warnings
-   - Analyze form data for current review status and actions taken
-   - Consider UI elements that indicate review workflow stage
-   - Examine table data for performance metrics or risk indicators
+**Return a single, valid JSON object** with the following keys: "summary", "resolution", "suggestedLabels", "policyDocument", "policyReasoning", "nextSteps", "escalationRequired", "riskLevel", "reviewWorkflowStage", "recommendedActions".
+- "resolution": A concise summary of your reasoning for the recommended action.
+- "nextSteps": The explicit, single next action for the agent to take.
+- "reviewWorkflowStage": Your assessment of the ad's current status.
+- "recommendedActions": A list of any other possible actions.
 
-3. **Policy-Based Next Steps:** Based on your assessment and any review page context, determine the appropriate agent interaction protocol:
-   - Apply relevant labels from the rules
-   - Determine if escalation is required (e.g., "System has marked ad label for HATE - agent interaction: Label the ad with applicable labels, submit the ad, then return to marked ad and escalate in ART to internal team for more review")
-   - Identify any special handling requirements based on risk level
-   - Consider current review status and suggest appropriate next actions
-
-**Your Response:**
-Return a JSON object with:
-- "summary": Brief context and intent summary
-- "resolution": One-sentence explanation for suggested labels (max 160 characters)
-- "suggestedLabels": List of applicable labels from the rules
-- "reviewPageContext": Any additional context found from review page analysis (if applicable)
-- "nextSteps": Expected agent interaction protocol based on policy enforcement tree
-- "escalationRequired": Boolean indicating if escalation is needed
-- "riskLevel": Assessment of content risk (Low/Medium/High/Critical)
-- "reviewWorkflowStage": Current stage in review process (if detectable from context)
-- "recommendedActions": Specific actions the agent should take based on current context
-
-**Important:** Do not include API keys, personal data, or sensitive strings in your response. Focus on policy compliance and enforcement protocols.
+Do not include any other text or formatting before or after the JSON object.
 `;
 
     try {
