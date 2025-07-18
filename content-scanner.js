@@ -232,8 +232,8 @@ function getPostContent() {
         approval_status: document.querySelector('[class*="approved"], [class*="rejected"], [class*="pending"]'),
         risk_level: document.querySelector('[class*="risk"], [class*="danger"], [class*="warning"]'),
         reviewer_info: document.querySelector('[class*="reviewer"], [class*="moderator"], [class*="admin"]'),
-        timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'), 
-        escalation: document.querySelector('[class*="escalate"], [class*=flag], [class*="report"]')
+        timestamp: document.querySelector('[class*="time"], [class*="date"], [datetime]'),
+        escalation: document.querySelector('[class*="escalate"], [class*="flag"], [class*="report"]')
     };
 
     Object.entries(reviewIndicators).forEach(([key, element]) => {
