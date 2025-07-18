@@ -33,10 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response && response.content && response.content.adText && response.content.adText !== 'Not found') {
                     postContent.value = response.content.adText;
                 } else {
-                    postContent.placeholder = 'Could not automatically scan content. Please paste it manually.';
+                    postContent.value = 'Could not automatically scan content. Please paste it manually.';
                 }
             } else {
-                postContent.placeholder = 'Cannot scan internal browser pages. Please paste content manually.';
+                postContent.value = 'Cannot scan internal browser pages. Please paste content manually.';
                 analyzeButton.disabled = true;
             }
         } catch (error) {
