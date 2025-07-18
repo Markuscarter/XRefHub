@@ -41,17 +41,56 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(response.error);
                 }
                 
+                let contentCaptured = false;
+                
                 if (response && response.content && response.content.adText && response.content.adText !== 'Not found') {
                     postContent.value = response.content.adText;
+                    contentCaptured = true;
+                    console.log('✅ Successfully captured content:', response.content.adText.substring(0, 100) + '...');
                 } else if (response && response.content) {
                     // Try to get any useful text from the response
                     const fallbackText = response.content.metadata?.bodyText || 
                                        Object.values(response.content.reviewContext || {}).map(r => r.content).join('\n') ||
                                        'Could not automatically scan content. Please paste it manually.';
                     postContent.value = fallbackText;
+                    
+                    if (fallbackText !== 'Could not automatically scan content. Please paste it manually.') {
+                        contentCaptured = true;
+                        console.log('✅ Successfully captured fallback content:', fallbackText.substring(0, 100) + '...');
+                    }
                 } else {
                     postContent.value = 'Could not automatically scan content. Please paste it manually.';
                 }
+                
+                // Automatically trigger analysis if we successfully captured content
+                if (contentCaptured && postContent.value.trim().length > 20) {
+                    console.log('🔄 Automatically triggering analysis...');
+                    setLoadingState(true, 'Analyzing content...');
+                    
+                    try {
+                        const analysisResponse = await Promise.race([
+                            chrome.runtime.sendMessage({
+                                action: 'analyze',
+                                content: postContent.value,
+                                mediaUrl: '' // TODO: Extract media URL if possible from scanner
+                            }),
+                            new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('Analysis timeout after 15 seconds')), 15000)
+                            )
+                        ]);
+                        
+                        handleAnalysisResponse(analysisResponse);
+                        console.log('✅ Analysis completed successfully');
+                        
+                    } catch (analysisError) {
+                        console.error('❌ Analysis failed:', analysisError);
+                        handleError(analysisError, 'Auto-analysis failed');
+                        showToast('Analysis failed, you can try the Analyze button manually', 'error');
+                    }
+                } else {
+                    console.log('⚠️ Content not suitable for auto-analysis, user must click Analyze button');
+                }
+                
             } else {
                 postContent.value = 'Cannot scan internal browser pages. Please paste content manually.';
                 analyzeButton.disabled = true;
@@ -158,20 +197,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleAnalysisResponse(response) {
+        console.log('📥 Received analysis response:', response);
+        
         if (response.error) {
+            console.error('❌ Analysis response contains error:', response.error);
             handleError(new Error(response.error), 'Analysis Error');
             return;
         }
-        currentAnalysis = response;
-        aiSummary.textContent = response.summary || 'No summary provided.';
-        aiResolution.textContent = response.resolution || 'No resolution provided.';
         
+        if (!response.summary && !response.resolution) {
+            console.warn('⚠️ Analysis response missing summary and resolution:', response);
+            handleError(new Error('Invalid analysis response - missing summary and resolution'), 'Analysis Error');
+            return;
+        }
+        
+        console.log('✅ Processing valid analysis response...');
+        currentAnalysis = response;
+        
+        // Update UI with analysis results
+        const summary = response.summary || 'No summary provided.';
+        const resolution = response.resolution || 'No resolution provided.';
+        
+        aiSummary.textContent = summary;
+        aiResolution.textContent = resolution;
+        console.log('📝 Updated summary and resolution in UI');
+        
+        // Populate labels
+        console.log('🏷️ Populating labels:', response.suggestedLabels);
         populateLabels(response.suggestedLabels || []);
 
         // Add the initial analysis to the chat history as the AI's first turn
-        chatHistory = [{ role: 'assistant', content: `Initial analysis complete. Summary: ${response.summary}. Resolution: ${response.resolution}` }];
+        const chatMessage = `Initial analysis complete. Summary: ${summary}. Resolution: ${resolution}`;
+        chatHistory = [{ role: 'assistant', content: chatMessage }];
         updateChatLog();
-        updateFinalOutput(); // Update output field after analysis
+        console.log('💬 Updated chat log with initial analysis');
+        
+        // Update final output
+        updateFinalOutput();
+        console.log('📋 Updated final output field');
+        
+        // Show success notification
+        showToast('Analysis completed successfully!', 'success');
+        console.log('✅ Analysis handling complete');
     }
 
     function populateLabels(suggestedLabels) {

@@ -122,20 +122,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Keep the message channel open for async operations
     (async () => {
         try {
+            console.log(`📨 Received message with action: ${request.action}`);
+            
             if (request.action === 'scanPage') {
+                console.log('🔍 Starting page scan for tab:', request.tabId);
                 const content = await scanPage(request.tabId);
+                console.log('✅ Page scan completed, content length:', content?.adText?.length || 0);
                 sendResponse({ content });
             } else if (request.action === 'analyze') {
+                console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
+                console.log('📝 Content preview:', request.content?.substring(0, 100) + '...');
+                
                 const analysis = await handleAnalysis(request.content, request.mediaUrl);
+                console.log('✅ Analysis completed:', {
+                    hasSummary: !!analysis.summary,
+                    hasResolution: !!analysis.resolution,
+                    suggestedLabels: analysis.suggestedLabels?.length || 0
+                });
+                
                 sendResponse(analysis);
             } else if (request.action === 'deeperAnalysis') {
+                console.log('🔬 Starting deeper analysis...');
                 const deeperAnalysis = await getDeeperAnalysis(request.content, request.mediaUrl);
+                console.log('✅ Deeper analysis completed');
                 sendResponse({ deeperAnalysis });
             } else if (request.action === 'writeToSheet') {
+                console.log('📊 Writing to sheet, data length:', request.data?.length || 0);
                 const result = await writeToSheet(request.data);
+                console.log('✅ Sheet write completed');
                 sendResponse({ success: true, result });
             } else if (request.action === 'getLabels') {
+                console.log('🏷️ Fetching labels...');
                 const labels = await getLabels();
+                console.log('✅ Labels fetched:', labels?.length || 0);
                 sendResponse({ data: labels });
             } else if (request.action === 'verifyDriveConnection') {
                 try {
