@@ -49,8 +49,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('✅ Successfully captured content:', response.content.adText.substring(0, 100) + '...');
                 } else if (response && response.content) {
                     // Try to get any useful text from the response
+                    const reviewContent = Object.values(response.content.reviewContext || {})
+                        .map(r => r?.content || '')
+                        .filter(content => content.length > 0)
+                        .join('\n');
+                    
                     const fallbackText = response.content.metadata?.bodyText || 
-                                       Object.values(response.content.reviewContext || {}).map(r => r.content).join('\n') ||
+                                       reviewContent ||
                                        'Could not automatically scan content. Please paste it manually.';
                     postContent.value = fallbackText;
                     
@@ -63,30 +68,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // Automatically trigger analysis if we successfully captured content
-                if (contentCaptured && postContent.value.trim().length > 20) {
+                if (contentCaptured && postContent.value && postContent.value.trim().length > 20) {
                     console.log('🔄 Automatically triggering analysis...');
-                    setLoadingState(true, 'Analyzing content...');
                     
-                    try {
-                        const analysisResponse = await Promise.race([
-                            chrome.runtime.sendMessage({
-                                action: 'analyze',
-                                content: postContent.value,
-                                mediaUrl: '' // TODO: Extract media URL if possible from scanner
-                            }),
-                            new Promise((_, reject) => 
-                                setTimeout(() => reject(new Error('Analysis timeout after 15 seconds')), 15000)
-                            )
-                        ]);
+                    // Small delay to ensure UI is updated
+                    setTimeout(async () => {
+                        setLoadingState(true, 'Analyzing content...');
                         
-                        handleAnalysisResponse(analysisResponse);
-                        console.log('✅ Analysis completed successfully');
-                        
-                    } catch (analysisError) {
-                        console.error('❌ Analysis failed:', analysisError);
-                        handleError(analysisError, 'Auto-analysis failed');
-                        showToast('Analysis failed, you can try the Analyze button manually', 'error');
-                    }
+                        try {
+                            const analysisResponse = await Promise.race([
+                                chrome.runtime.sendMessage({
+                                    action: 'analyze',
+                                    content: postContent.value,
+                                    mediaUrl: '' // TODO: Extract media URL if possible from scanner
+                                }),
+                                new Promise((_, reject) => 
+                                    setTimeout(() => reject(new Error('Analysis timeout after 15 seconds')), 15000)
+                                )
+                            ]);
+                            
+                            if (analysisResponse) {
+                                handleAnalysisResponse(analysisResponse);
+                                console.log('✅ Analysis completed successfully');
+                            } else {
+                                throw new Error('No response received from analysis');
+                            }
+                            
+                        } catch (analysisError) {
+                            console.error('❌ Analysis failed:', analysisError);
+                            handleError(analysisError, 'Auto-analysis failed');
+                            showToast('Analysis failed, you can try the Analyze button manually', 'error');
+                        } finally {
+                            setLoadingState(false);
+                        }
+                    }, 100);
                 } else {
                     console.log('⚠️ Content not suitable for auto-analysis, user must click Analyze button');
                 }
