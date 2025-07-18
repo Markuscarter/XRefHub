@@ -96,8 +96,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     submitButton.addEventListener('click', async () => {
-        // This will be re-implemented later based on settings
-        showToast('Submit to Sheet clicked. No action configured yet.');
+        const output = finalOutput.value;
+        if (!output || submitButton.disabled) return;
+
+        setLoadingState(true, 'Submitting...');
+        submitButton.textContent = 'Submitting...';
+
+        try {
+            // The data should be an array of columns for the sheet
+            const data = output.split(' - ');
+            const response = await chrome.runtime.sendMessage({ action: 'writeToSheet', data });
+            if (response.error) throw new Error(response.error);
+            
+            showToast('Successfully submitted to sheet!');
+            submitButton.textContent = 'Success!';
+            setTimeout(() => {
+                submitButton.textContent = 'Submit to Sheet';
+            }, 2000);
+
+        } catch (error) {
+            handleError(error, 'Submission failed');
+            submitButton.textContent = 'Error!';
+        } finally {
+            setLoadingState(false);
+        }
     });
 
     chatSendButton.addEventListener('click', handleChat);
@@ -131,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add the initial analysis to the chat history as the AI's first turn
         chatHistory = [{ role: 'assistant', content: `Initial analysis complete. Summary: ${response.summary}. Resolution: ${response.resolution}` }];
         updateChatLog();
+        updateFinalOutput(); // Update output field after analysis
     }
 
     function populateLabels(suggestedLabels) {
@@ -152,9 +175,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="checkbox" id="label-${label.name}" name="${label.name}" ${isSuggested ? 'checked' : ''}>
                     <label for="label-${label.name}">${label.name}</label>
                 `;
+                wrapper.querySelector('input').addEventListener('change', updateFinalOutput);
                 labelsContainer.appendChild(wrapper);
             });
         });
+    }
+
+    function updateFinalOutput() {
+        const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked')).map(cb => cb.name);
+        const resolution = currentAnalysis.resolution || "No resolution yet.";
+        const username = "User"; // TODO: Get from settings
+        const date = new Date().toLocaleDateString();
+        
+        finalOutput.value = `${selectedLabels.join(', ')} - ${resolution} - ${username} - ${date}`;
     }
 
     async function handleChat() {
