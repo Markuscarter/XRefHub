@@ -28,17 +28,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true, 'Scanning page...');
         try {
             const activeTab = await getActiveTab();
-            // Expanded the list of URLs for better detection
-            const supportedUrls = ['facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'reddit.com'];
-            if (activeTab && (supportedUrls.some(url => activeTab.url.includes(url)) || activeTab.url.includes('review-page'))) { // TODO: Make this configurable
+            if (activeTab && activeTab.url && !activeTab.url.startsWith('chrome://')) {
                 const response = await chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id });
-                if (response && response.content && response.content.adText) {
+                if (response && response.content && response.content.adText && response.content.adText !== 'Not found') {
                     postContent.value = response.content.adText;
                 } else {
-                    postContent.value = 'Could not automatically scan content. Please paste it manually.';
+                    postContent.placeholder = 'Could not automatically scan content. Please paste it manually.';
                 }
             } else {
-                postContent.value = 'Switch to a supported page (Facebook, X) to scan content automatically.';
+                postContent.placeholder = 'Cannot scan internal browser pages. Please paste content manually.';
                 analyzeButton.disabled = true;
             }
         } catch (error) {
