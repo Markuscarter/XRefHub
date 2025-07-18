@@ -176,6 +176,38 @@ function getPostContent() {
     // Extract review-specific context (common patterns)
     const reviewContext = {};
     
+    // Helper function to find text near a heading
+    function findTextNearHeading(keywords) {
+        for (const tag of ['h1', 'h2', 'h3', 'h4', 'strong', 'b']) {
+            for (const el of document.querySelectorAll(tag)) {
+                const headingText = el.innerText.toLowerCase();
+                if (keywords.some(k => headingText.includes(k))) {
+                    // Found a heading, now get the content from its parent or a sibling
+                    const parent = el.parentElement;
+                    if (parent && parent.innerText.length > el.innerText.length) {
+                        // Heuristic: if parent has more text, it might be the container
+                        return parent.innerText.replace(el.innerText, '').trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    // --- NEW: More specific contextual extraction ---
+    reviewContext.agentNotes = findTextNearHeading(['notes', 'comments', 'feedback', 'review history']);
+    reviewContext.targetingInfo = findTextNearHeading(['targeting', 'audience', 'location', 'market']);
+    reviewContext.userBio = findTextNearHeading(['about the user', 'user profile', 'bio']);
+    
+    // Find existing labels more explicitly
+    const existingLabels = [];
+    const labelsContainer = findTextNearHeading(['existing labels', 'current tags', 'labels applied']);
+    if (labelsContainer) {
+        existingLabels.push(...labelsContainer.split('\n').filter(l => l.trim() !== ''));
+    }
+    reviewContext.existingLabels = existingLabels;
+
+
     // Look for common review page patterns
     const reviewKeywords = ['review', 'approve', 'reject', 'pending', 'proved', 'rejected', 'escalate', 'risk', 'violation'];
     reviewKeywords.forEach(keyword => {

@@ -197,8 +197,8 @@ ${mediaUrl ? `- **Media URL:** ${mediaUrl}` : ''}
 ${reviewContextSummary}
 
 **Your Reasoning Process:**
-1.  **Synthesize All Information:** Review the post content, the rich context from the review page, and the official policy documents.
-2.  **Identify the Crux:** What is the single most important issue or conflict between the post and the policies?
+1.  **Synthesize All Information:** Review the post content, the rich context from the review page (paying close attention to 'agentNotes', 'targetingInfo', 'userBio', and 'existingLabels'), and the official policy documents.
+2.  **Identify the Crux:** What is the single most important issue or conflict between the post and the policies, especially when considering the new contextual information?
 3.  **Determine Current State:** Based on the review context, what is the current status of this ad? (e.g., "pending initial review," "escalated for hate speech," "previously approved").
 4.  **Consult Policy for Next Steps:** Find the relevant <policy_document>. Does it contain a specific "enforcement tree" or "next step protocol"?
 5.  **Formulate Recommendation:** Based on the policy, recommend the single next best action for the human agent. Be explicit. (e.g., "Action: Escalate to the 'High-Risk Content' queue," "Action: Apply 'Financial Services' label and approve.").
