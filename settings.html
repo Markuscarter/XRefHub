@@ -55,11 +55,20 @@
                     <input type="text" id="google-folder-id" class="input-field" placeholder="Enter your Google Drive Folder ID">
                 </div>
             </section>
+
+            <section class="settings-section">
+                <h2>Connection Status</h2>
+                <div class="connection-status">
+                    <span id="google-status-icon">⚪️</span>
+                    <span id="google-status-text">Not connected to Google</span>
+                    <button id="google-signin-button" class="btn">Sign In with Google</button>
+                </div>
+            </section>
         </main>
 
         <footer>
-            <button id="save-button" class="btn btn-primary">Save Settings</button>
-            <button id="load-from-drive-button" class="btn">Load Settings from Drive</button>
+            <button id="save-button" class="btn btn-primary" disabled>Save Settings</button>
+            <button id="load-from-drive-button" class="btn" disabled>Load Settings from Drive</button>
             <div id="save-status"></div>
         </footer>
     </div>

@@ -1,6 +1,7 @@
-import { fetchConfiguration, fetchGoogleUserProfile } from './google-drive.js';
+import { fetchConfiguration, fetchGoogleUserProfile, getAuthToken } from './google-drive.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Elements ---
     const providerCards = document.querySelectorAll('.provider-card');
     const saveButton = document.getElementById('save-button');
     const loadFromDriveButton = document.getElementById('load-from-drive-button');
@@ -10,46 +11,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const groqApiKeyInput = document.getElementById('groq-api-key');
     const googleSheetIdInput = document.getElementById('google-sheet-id');
     const googleFolderIdInput = document.getElementById('google-folder-id');
+    const googleStatusIcon = document.getElementById('google-status-icon');
+    const googleStatusText = document.getElementById('google-status-text');
+    const googleSigninButton = document.getElementById('google-signin-button');
 
-    let selectedProvider = 'gemini'; // Default provider
+    // --- State ---
+    let selectedProvider = 'gemini';
 
-    // Function to load settings from chrome.storage
+    // --- Functions ---
+
+    const updateGoogleStatus = (status, message) => {
+        googleSigninButton.style.display = 'none'; // Hide by default
+        saveButton.disabled = true;
+        loadFromDriveButton.disabled = true;
+
+        switch (status) {
+            case 'connected':
+                googleStatusIcon.textContent = '✅';
+                googleStatusText.textContent = message || 'Connected to Google';
+                saveButton.disabled = false;
+                loadFromDriveButton.disabled = false;
+                break;
+            case 'disconnected':
+                googleStatusIcon.textContent = '⚪️';
+                googleStatusText.textContent = message || 'Not connected to Google';
+                googleSigninButton.style.display = 'block';
+                break;
+            case 'loading':
+                googleStatusIcon.textContent = '⏳';
+                googleStatusText.textContent = message || 'Connecting...';
+                break;
+            case 'error':
+                 googleStatusIcon.textContent = '❌';
+                googleStatusText.textContent = message || 'Connection Failed';
+                googleSigninButton.style.display = 'block';
+                break;
+        }
+    };
+    
+    const checkGoogleConnection = async () => {
+        updateGoogleStatus('loading', 'Checking connection...');
+        try {
+            // Use a non-interactive token check first
+            const token = await chrome.identity.getAuthToken({ interactive: false });
+            if (!token) throw new Error("Not signed in.");
+            
+            const profile = await fetchGoogleUserProfile();
+            updateGoogleStatus('connected', `Connected as ${profile.name}`);
+        } catch (error) {
+            console.warn('Silent sign-in failed:', error.message);
+            updateGoogleStatus('disconnected');
+        }
+    };
+    
+    const handleGoogleSignIn = async () => {
+        updateGoogleStatus('loading', 'Please follow the sign-in prompt...');
+        try {
+            const token = await getAuthToken(); // This will force the interactive prompt
+            const profile = await fetchGoogleUserProfile();
+            updateGoogleStatus('connected', `Connected as ${profile.name}`);
+        } catch (error) {
+            console.error('Explicit sign-in failed:', error);
+            updateGoogleStatus('error', 'Sign-in failed. Please try again.');
+        }
+    };
+
     const loadSettings = () => {
         chrome.storage.local.get(['settings'], (result) => {
-            if (chrome.runtime.lastError) {
-                console.error('Error loading settings:', chrome.runtime.lastError);
-                return;
-            }
             if (result.settings) {
                 const { provider, username, chatgptApiKey, groqApiKey, googleSheetId, googleFolderId } = result.settings;
-                
                 selectedProvider = provider || 'gemini';
-                updateProviderSelection();
-
                 usernameInput.value = username || '';
                 chatgptApiKeyInput.value = chatgptApiKey || '';
                 groqApiKeyInput.value = groqApiKey || '';
                 googleSheetIdInput.value = googleSheetId || '';
                 googleFolderIdInput.value = googleFolderId || '';
-            } else {
-                // Set default if no settings are found
                 updateProviderSelection();
             }
         });
     };
 
-    // Function to update the visual selection of provider cards
     const updateProviderSelection = () => {
         providerCards.forEach(card => {
-            if (card.dataset.provider === selectedProvider) {
-                card.classList.add('selected');
-            } else {
-                card.classList.remove('selected');
-            }
+            card.classList.toggle('selected', card.dataset.provider === selectedProvider);
         });
     };
 
-    // Event listener for provider card clicks
+    // --- Event Listeners ---
+    
+    googleSigninButton.addEventListener('click', handleGoogleSignIn);
+
     providerCards.forEach(card => {
         card.addEventListener('click', () => {
             selectedProvider = card.dataset.provider;
@@ -57,35 +108,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Event listener for the load from drive button
     loadFromDriveButton.addEventListener('click', async () => {
         saveStatus.textContent = 'Loading from Google Drive...';
-        saveStatus.className = 'loading';
-
         try {
-            // Fetch both configuration and user profile in parallel
-            const [config, userProfile] = await Promise.all([
-                fetchConfiguration(),
-                fetchGoogleUserProfile()
-            ]);
-
-            // Populate the fields with the loaded configuration
+            const [config, userProfile] = await Promise.all([fetchConfiguration(), fetchGoogleUserProfile()]);
             usernameInput.value = userProfile.name || config.username || '';
             chatgptApiKeyInput.value = config.chatgptApiKey || '';
             groqApiKeyInput.value = config.groqApiKey || '';
             googleSheetIdInput.value = config.googleSheetId || '';
             googleFolderIdInput.value = config.googleFolderId || '';
-            
             saveStatus.textContent = 'Settings loaded! Please click Save.';
-            saveStatus.className = 'success';
         } catch (error) {
             console.error('Failed to load settings from Drive:', error);
             saveStatus.textContent = `Error: ${error.message}`;
-            saveStatus.className = 'error';
         }
     });
 
-    // Event listener for the save button
     saveButton.addEventListener('click', () => {
         const settings = {
             provider: selectedProvider,
@@ -95,22 +133,13 @@ document.addEventListener('DOMContentLoaded', () => {
             googleSheetId: googleSheetIdInput.value.trim(),
             googleFolderId: googleFolderIdInput.value.trim(),
         };
-
         chrome.storage.local.set({ settings }, () => {
-            if (chrome.runtime.lastError) {
-                saveStatus.textContent = 'Error saving settings!';
-                saveStatus.className = 'error';
-                console.error('Error saving settings:', chrome.runtime.lastError);
-            } else {
-                saveStatus.textContent = 'Settings saved successfully!';
-                saveStatus.className = 'success';
-                setTimeout(() => {
-                    saveStatus.textContent = '';
-                }, 3000);
-            }
+            saveStatus.textContent = 'Settings saved successfully!';
+            setTimeout(() => { saveStatus.textContent = ''; }, 3000);
         });
     });
 
-    // Initial load of settings
+    // --- Initializers ---
     loadSettings();
+    checkGoogleConnection();
 }); 
