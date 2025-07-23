@@ -9,7 +9,13 @@
 <body>
     <div class="container">
         <header>
-            <h1>Xrefhub Settings</h1>
+            <div class="header-content">
+                <img src="icons/icon48.png" alt="Xrefhub" class="app-icon">
+                <div class="header-text">
+                    <h1>Xrefhub Settings</h1>
+                    <p class="subtitle">AI-powered content analysis and review</p>
+                </div>
+            </div>
         </header>
 
         <main>
@@ -62,6 +68,29 @@
                     <span id="google-status-icon">⚪️</span>
                     <span id="google-status-text">Not connected to Google</span>
                     <button id="google-signin-button" class="btn">Sign In with Google</button>
+                </div>
+                
+                <div class="status-grid">
+                    <div class="connection-item" id="drive-status">
+                        <span class="status-icon">⚪️</span>
+                        <span class="status-text">Google Drive</span>
+                        <span class="checksum" id="drive-checksum"></span>
+                    </div>
+                    <div class="connection-item" id="sheets-status">
+                        <span class="status-icon">⚪️</span>
+                        <span class="status-text">Google Sheets</span>
+                        <span class="checksum" id="sheets-checksum"></span>
+                    </div>
+                    <div class="connection-item" id="openai-status">
+                        <span class="status-icon">⚪️</span>
+                        <span class="status-text">OpenAI API</span>
+                        <span class="checksum" id="openai-checksum"></span>
+                    </div>
+                    <div class="connection-item" id="groq-status">
+                        <span class="status-icon">⚪️</span>
+                        <span class="status-text">Groq API</span>
+                        <span class="checksum" id="groq-checksum"></span>
+                    </div>
                 </div>
             </section>
         </main>

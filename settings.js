@@ -15,13 +15,111 @@ document.addEventListener('DOMContentLoaded', () => {
     const googleStatusText = document.getElementById('google-status-text');
     const googleSigninButton = document.getElementById('google-signin-button');
 
+    // Connection status elements
+    const driveStatus = document.getElementById('drive-status');
+    const sheetsStatus = document.getElementById('sheets-status');
+    const openaiStatus = document.getElementById('openai-status');
+    const groqStatus = document.getElementById('groq-status');
+
     // --- State ---
     let selectedProvider = 'gemini';
 
-    // --- Functions ---
+    // --- Utility Functions ---
+    
+    const generateChecksum = (input) => {
+        if (!input) return '';
+        const hash = input.split('').reduce((a, b) => {
+            a = ((a << 5) - a) + b.charCodeAt(0);
+            return a & a;
+        }, 0);
+        return Math.abs(hash).toString(36).substring(0, 6).toUpperCase();
+    };
+
+    const animateButton = (button, state, duration = 2000) => {
+        button.classList.remove('loading', 'success');
+        if (state === 'loading') {
+            button.classList.add('loading');
+        } else if (state === 'success') {
+            button.classList.add('success');
+            setTimeout(() => button.classList.remove('success'), duration);
+        }
+    };
+
+    const updateConnectionStatus = (element, status, text, checksum = '') => {
+        const icon = element.querySelector('.status-icon');
+        const statusText = element.querySelector('.status-text');
+        const checksumEl = element.querySelector('.checksum');
+        
+        element.classList.remove('connected', 'error');
+        
+        switch (status) {
+            case 'connected':
+                icon.textContent = '✅';
+                element.classList.add('connected');
+                break;
+            case 'error':
+                icon.textContent = '❌';
+                element.classList.add('error');
+                break;
+            default:
+                icon.textContent = '⚪️';
+        }
+        
+        if (text) statusText.textContent = text;
+        checksumEl.textContent = checksum;
+    };
+
+    const checkAllConnections = async () => {
+        const settings = await chrome.storage.local.get('settings');
+        const { googleSheetId, googleFolderId, chatgptApiKey, groqApiKey } = settings.settings || {};
+        
+        // Check Google Drive
+        if (googleFolderId) {
+            try {
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${googleFolderId}`, {
+                    headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
+                });
+                if (response.ok) {
+                    updateConnectionStatus(driveStatus, 'connected', 'Google Drive', generateChecksum(googleFolderId));
+                } else {
+                    updateConnectionStatus(driveStatus, 'error', 'Drive: Invalid ID');
+                }
+            } catch (error) {
+                updateConnectionStatus(driveStatus, 'error', 'Drive: No access');
+            }
+        }
+        
+        // Check Google Sheets
+        if (googleSheetId) {
+            try {
+                const sheetId = googleSheetId.includes('/') ? 
+                    googleSheetId.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1] : googleSheetId;
+                const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, {
+                    headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
+                });
+                if (response.ok) {
+                    updateConnectionStatus(sheetsStatus, 'connected', 'Google Sheets', generateChecksum(sheetId));
+                } else {
+                    updateConnectionStatus(sheetsStatus, 'error', 'Sheets: Invalid ID');
+                }
+            } catch (error) {
+                updateConnectionStatus(sheetsStatus, 'error', 'Sheets: No access');
+            }
+        }
+        
+        // Check OpenAI API
+        if (chatgptApiKey) {
+            updateConnectionStatus(openaiStatus, 'connected', 'OpenAI API', generateChecksum(chatgptApiKey));
+        }
+        
+        // Check Groq API
+        if (groqApiKey) {
+            updateConnectionStatus(groqStatus, 'connected', 'Groq API', generateChecksum(groqApiKey));
+        }
+    };
 
     const updateGoogleStatus = (status, message) => {
-        googleSigninButton.style.display = 'none'; // Hide by default
+        googleSigninButton.style.display = 'none';
         saveButton.disabled = true;
         loadFromDriveButton.disabled = true;
 
@@ -31,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 googleStatusText.textContent = message || 'Connected to Google';
                 saveButton.disabled = false;
                 loadFromDriveButton.disabled = false;
+                checkAllConnections(); // Check other services when Google is connected
                 break;
             case 'disconnected':
                 googleStatusIcon.textContent = '⚪️';
@@ -52,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkGoogleConnection = async () => {
         updateGoogleStatus('loading', 'Checking connection...');
         try {
-            // Use a non-interactive token check first
             const token = await chrome.identity.getAuthToken({ interactive: false });
             if (!token) throw new Error("Not signed in.");
             
@@ -65,11 +163,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const handleGoogleSignIn = async () => {
+        animateButton(googleSigninButton, 'loading');
         updateGoogleStatus('loading', 'Please follow the sign-in prompt...');
         try {
-            const token = await getAuthToken(); // This will force the interactive prompt
+            const token = await getAuthToken();
             const profile = await fetchGoogleUserProfile();
             updateGoogleStatus('connected', `Connected as ${profile.name}`);
+            animateButton(googleSigninButton, 'success');
         } catch (error) {
             console.error('Explicit sign-in failed:', error);
             updateGoogleStatus('error', 'Sign-in failed. Please try again.');
@@ -87,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 googleSheetIdInput.value = googleSheetId || '';
                 googleFolderIdInput.value = googleFolderId || '';
                 updateProviderSelection();
+                checkAllConnections(); // Check connections after loading settings
             }
         });
     };
@@ -109,7 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     loadFromDriveButton.addEventListener('click', async () => {
+        animateButton(loadFromDriveButton, 'loading');
         saveStatus.textContent = 'Loading from Google Drive...';
+        saveStatus.className = 'loading';
         try {
             const [config, userProfile] = await Promise.all([fetchConfiguration(), fetchGoogleUserProfile()]);
             usernameInput.value = userProfile.name || config.username || '';
@@ -118,13 +221,18 @@ document.addEventListener('DOMContentLoaded', () => {
             googleSheetIdInput.value = config.googleSheetId || '';
             googleFolderIdInput.value = config.googleFolderId || '';
             saveStatus.textContent = 'Settings loaded! Please click Save.';
+            saveStatus.className = 'success';
+            animateButton(loadFromDriveButton, 'success');
+            checkAllConnections(); // Refresh connection status
         } catch (error) {
             console.error('Failed to load settings from Drive:', error);
             saveStatus.textContent = `Error: ${error.message}`;
+            saveStatus.className = 'error';
         }
     });
 
     saveButton.addEventListener('click', () => {
+        animateButton(saveButton, 'loading');
         const settings = {
             provider: selectedProvider,
             username: usernameInput.value.trim(),
@@ -135,7 +243,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         chrome.storage.local.set({ settings }, () => {
             saveStatus.textContent = 'Settings saved successfully!';
-            setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+            saveStatus.className = 'success';
+            animateButton(saveButton, 'success');
+            setTimeout(() => { 
+                saveStatus.textContent = ''; 
+                saveStatus.className = '';
+            }, 3000);
+            checkAllConnections(); // Refresh connection status after saving
         });
     });
 

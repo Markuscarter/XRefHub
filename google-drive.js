@@ -48,6 +48,7 @@ async function getRuleFileContent(fileId) {
  * @returns {Promise<string>} A single string containing all concatenated rule document contents.
  */
 export async function fetchAllRules() {
+  try {
     const { settings } = await chrome.storage.local.get('settings');
     const folderId = settings?.googleFolderId;
     
@@ -78,6 +79,10 @@ export async function fetchAllRules() {
       }
     }
     return allRulesContent;
+  } catch (error) {
+    console.error('Error fetching rules from Google Drive:', error);
+    throw error;
+  }
 }
 
 /**
@@ -86,27 +91,45 @@ export async function fetchAllRules() {
  */
 export async function fetchConfiguration() {
   const CONFIG_FILE_NAME = 'xrefhub_config.json';
-  const token = await getAuthToken();
+  
+  try {
+    const token = await getAuthToken();
 
-  const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${CONFIG_FILE_NAME}' and trashed=false&spaces=drive&fields=files(id,name)`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
+    // Find the configuration file
+    const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${CONFIG_FILE_NAME}' and trashed=false&spaces=drive&fields=files(id,name)`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
 
-  if (!findResponse.ok) throw new Error('Failed to search for config file.');
+    if (!findResponse.ok) {
+      throw new Error(`Failed to search for config file. Status: ${findResponse.status}`);
+    }
 
-  const findData = await findResponse.json();
-  if (!findData.files || findData.files.length === 0) {
-    throw new Error(`Configuration file "${CONFIG_FILE_NAME}" not found in your Google Drive.`);
+    const findData = await findResponse.json();
+    if (!findData.files || findData.files.length === 0) {
+      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" not found in your Google Drive.`);
+    }
+
+    // Download the file content
+    const fileId = findData.files[0].id;
+    const downloadResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!downloadResponse.ok) {
+      throw new Error(`Failed to download config file. Status: ${downloadResponse.status}`);
+    }
+
+    // Get text content and parse as JSON
+    const textContent = await downloadResponse.text();
+    if (!textContent.trim()) {
+      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" is empty.`);
+    }
+
+    return JSON.parse(textContent);
+  } catch (error) {
+    console.error('Error fetching configuration from Drive:', error);
+    throw error;
   }
-
-  const fileId = findData.files[0].id;
-  const downloadResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-
-  if (!downloadResponse.ok) throw new Error('Failed to download config file.');
-
-  return await downloadResponse.json();
 }
 
 /**
@@ -114,6 +137,7 @@ export async function fetchConfiguration() {
  * @returns {Promise<object>} The user's profile object, containing name, email, etc.
  */
 export async function fetchGoogleUserProfile() {
+  try {
     const token = await getAuthToken();
     const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -122,5 +146,10 @@ export async function fetchGoogleUserProfile() {
     if (!response.ok) {
       throw new Error(`Failed to fetch user profile. Status: ${response.status}`);
     }
+    
     return await response.json();
+  } catch (error) {
+    console.error('Error fetching Google user profile:', error);
+    throw error;
+  }
 } 
