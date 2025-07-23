@@ -1,6 +1,9 @@
+import { fetchConfiguration } from './google-drive.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const providerCards = document.querySelectorAll('.provider-card');
     const saveButton = document.getElementById('save-button');
+    const loadFromDriveButton = document.getElementById('load-from-drive-button');
     const saveStatus = document.getElementById('save-status');
     const usernameInput = document.getElementById('username');
     const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
@@ -56,6 +59,41 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedProvider = card.dataset.provider;
             updateProviderSelection();
         });
+    });
+
+    // Event listener for the load from drive button
+    loadFromDriveButton.addEventListener('click', async () => {
+        saveStatus.textContent = 'Loading settings from Google Drive...';
+        saveStatus.className = 'loading';
+
+        try {
+            const config = await fetchConfiguration();
+
+            // Populate the fields with the loaded configuration
+            usernameInput.value = config.username || '';
+            chatgptApiKeyInput.value = config.chatgptApiKey || '';
+            groqApiKeyInput.value = config.groqApiKey || '';
+            googleSheetIdInput.value = config.googleSheetId || '';
+            googleFolderIdInput.value = config.googleFolderId || '';
+            googleClientIdInput.value = config.googleClientId || '';
+            googleClientSecretInput.value = config.googleClientSecret || '';
+            
+            // Note: Provider selection is not part of the config file
+            
+            saveStatus.textContent = 'Settings loaded successfully! Please click Save.';
+            saveStatus.className = 'success';
+        } catch (error) {
+            console.error('Failed to load settings from Drive:', error);
+            saveStatus.textContent = `Error: ${error.message}`;
+            saveStatus.className = 'error';
+        } finally {
+            setTimeout(() => {
+                if (saveStatus.className !== 'success' && saveStatus.className !== 'error') {
+                    saveStatus.textContent = '';
+                    saveStatus.className = '';
+                }
+            }, 5000);
+        }
     });
 
     // Event listener for the save button

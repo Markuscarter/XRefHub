@@ -231,4 +231,55 @@ export async function fetchAllRules() {
     console.error('Error fetching rule files from folder:', error);
     throw new Error('DRIVE_UNKNOWN_ERROR');
   }
+}
+
+/**
+ * Fetches the centralized configuration file (xrefhub_config.json) from Google Drive.
+ * @returns {Promise<object>} The parsed JSON configuration object.
+ * @throws {Error} If the file is not found, is empty, or cannot be parsed.
+ */
+export async function fetchConfiguration() {
+  const CONFIG_FILE_NAME = 'xrefhub_config.json';
+
+  try {
+    const token = await getAuthToken();
+
+    // 1. Find the configuration file by name
+    const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${CONFIG_FILE_NAME}' and trashed=false&spaces=drive&fields=files(id,name)`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!findResponse.ok) {
+      throw new Error(`Failed to search for config file. Status: ${findResponse.status}`);
+    }
+
+    const findData = await findResponse.json();
+    if (!findData.files || findData.files.length === 0) {
+      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" not found in your Google Drive.`);
+    }
+
+    const fileId = findData.files[0].id;
+
+    // 2. Download the file content
+    const downloadResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!downloadResponse.ok) {
+      throw new Error(`Failed to download config file content. Status: ${downloadResponse.status}`);
+    }
+
+    const content = await downloadResponse.text();
+    if (!content) {
+      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" is empty.`);
+    }
+
+    // 3. Parse and return the JSON content
+    return JSON.parse(content);
+
+  } catch (error) {
+    console.error('Error fetching configuration from Drive:', error);
+    // Re-throw to be handled by the caller
+    throw error;
+  }
 } 
