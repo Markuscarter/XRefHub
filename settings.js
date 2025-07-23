@@ -1,4 +1,4 @@
-import { fetchConfiguration } from './google-drive.js';
+import { fetchConfiguration, fetchGoogleUserProfile } from './google-drive.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const providerCards = document.querySelectorAll('.provider-card');
@@ -67,10 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
         saveStatus.className = 'loading';
 
         try {
-            const config = await fetchConfiguration();
+            // Fetch both configuration and user profile in parallel
+            const [config, userProfile] = await Promise.all([
+                fetchConfiguration(),
+                fetchGoogleUserProfile()
+            ]);
 
             // Populate the fields with the loaded configuration
-            usernameInput.value = config.username || '';
+            // Prioritize Google profile name, then config file, then empty
+            usernameInput.value = userProfile.name || config.username || '';
             chatgptApiKeyInput.value = config.chatgptApiKey || '';
             groqApiKeyInput.value = config.groqApiKey || '';
             googleSheetIdInput.value = config.googleSheetId || '';

@@ -27,4 +27,5 @@ yarn-error.log*
 
 # Secret files
 client_secret.json
-.env 
+.env
+xrefhub_config.json 

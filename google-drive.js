@@ -282,4 +282,27 @@ export async function fetchConfiguration() {
     // Re-throw to be handled by the caller
     throw error;
   }
+}
+
+/**
+ * Fetches the currently authenticated user's Google profile information.
+ * @returns {Promise<object>} The user's profile object, containing name, email, etc.
+ */
+export async function fetchGoogleUserProfile() {
+  try {
+    const token = await getAuthToken();
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user profile. Status: ${response.status}`);
+    }
+
+    const profile = await response.json();
+    return profile;
+  } catch (error) {
+    console.error('Error fetching Google user profile:', error);
+    throw error;
+  }
 } 
