@@ -10,8 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const groqApiKeyInput = document.getElementById('groq-api-key');
     const googleSheetIdInput = document.getElementById('google-sheet-id');
     const googleFolderIdInput = document.getElementById('google-folder-id');
-    const googleClientIdInput = document.getElementById('google-client-id');
-    const googleClientSecretInput = document.getElementById('google-client-secret');
 
     let selectedProvider = 'gemini'; // Default provider
 
@@ -23,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (result.settings) {
-                const { provider, username, chatgptApiKey, groqApiKey, googleSheetId, googleFolderId, googleClientId, googleClientSecret } = result.settings;
+                const { provider, username, chatgptApiKey, groqApiKey, googleSheetId, googleFolderId } = result.settings;
                 
                 selectedProvider = provider || 'gemini';
                 updateProviderSelection();
@@ -33,8 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 groqApiKeyInput.value = groqApiKey || '';
                 googleSheetIdInput.value = googleSheetId || '';
                 googleFolderIdInput.value = googleFolderId || '';
-                googleClientIdInput.value = googleClientId || '';
-                googleClientSecretInput.value = googleClientSecret || '';
             } else {
                 // Set default if no settings are found
                 updateProviderSelection();
@@ -63,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event listener for the load from drive button
     loadFromDriveButton.addEventListener('click', async () => {
-        saveStatus.textContent = 'Loading settings from Google Drive...';
+        saveStatus.textContent = 'Loading from Google Drive...';
         saveStatus.className = 'loading';
 
         try {
@@ -74,30 +70,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ]);
 
             // Populate the fields with the loaded configuration
-            // Prioritize Google profile name, then config file, then empty
             usernameInput.value = userProfile.name || config.username || '';
             chatgptApiKeyInput.value = config.chatgptApiKey || '';
             groqApiKeyInput.value = config.groqApiKey || '';
             googleSheetIdInput.value = config.googleSheetId || '';
             googleFolderIdInput.value = config.googleFolderId || '';
-            googleClientIdInput.value = config.googleClientId || '';
-            googleClientSecretInput.value = config.googleClientSecret || '';
             
-            // Note: Provider selection is not part of the config file
-            
-            saveStatus.textContent = 'Settings loaded successfully! Please click Save.';
+            saveStatus.textContent = 'Settings loaded! Please click Save.';
             saveStatus.className = 'success';
         } catch (error) {
             console.error('Failed to load settings from Drive:', error);
             saveStatus.textContent = `Error: ${error.message}`;
             saveStatus.className = 'error';
-        } finally {
-            setTimeout(() => {
-                if (saveStatus.className !== 'success' && saveStatus.className !== 'error') {
-                    saveStatus.textContent = '';
-                    saveStatus.className = '';
-                }
-            }, 5000);
         }
     });
 
@@ -110,8 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
             groqApiKey: groqApiKeyInput.value.trim(),
             googleSheetId: googleSheetIdInput.value.trim(),
             googleFolderId: googleFolderIdInput.value.trim(),
-            googleClientId: googleClientIdInput.value.trim(),
-            googleClientSecret: googleClientSecretInput.value.trim(),
         };
 
         chrome.storage.local.set({ settings }, () => {
@@ -124,7 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveStatus.className = 'success';
                 setTimeout(() => {
                     saveStatus.textContent = '';
-                    saveStatus.className = '';
                 }, 3000);
             }
         });

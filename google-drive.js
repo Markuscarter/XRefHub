@@ -1,180 +1,42 @@
 /**
- * @file Manages all interactions with the Google Drive API.
+ * @file Manages all interactions with the Google Drive API using the standard Chrome Identity API.
  */
 
-const FOLDER_NAME = 'Policy and Labels Enforcement';
-
 /**
- * Gets an OAuth 2.0 token by performing a manual auth flow.
- * This is necessary because we are storing the client secret in chrome.storage
- * instead of a file, which prevents the standard chrome.identity.getAuthToken from working.
+ * Gets an OAuth 2.0 token from the Chrome Identity API.
+ * This is the standard, recommended way to handle authentication.
+ * Chrome will handle caching, refreshing, and user prompts.
  * @returns {Promise<string>} The OAuth token.
  */
-async function getAuthToken() {
-    // 1. Get client credentials from storage
-    const storedSettings = await new Promise(resolve => chrome.storage.local.get('settings', resolve));
-    const clientId = storedSettings?.settings?.googleClientId;
-    const clientSecret = storedSettings?.settings?.googleClientSecret;
-
-    if (!clientId || !clientSecret) {
-        throw new Error("Google Client ID or Secret not found. Please go to the settings page and enter your credentials.");
-    }
-
-    const redirectUri = chrome.identity.getRedirectURL();
-    const scopes = [
-        "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/spreadsheets"
-    ].join(' ');
-
-    // 2. Launch web auth flow to get an authorization code
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&access_type=offline`;
-
-    const responseUrl = await new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow({
-            url: authUrl,
-            interactive: true
-        }, (responseUrl) => {
-            if (chrome.runtime.lastError || !responseUrl) {
-                reject(new Error(chrome.runtime.lastError?.message || "Authentication flow failed."));
-            } else {
-                resolve(responseUrl);
-            }
-        });
+export async function getAuthToken() {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      if (chrome.runtime.lastError || !token) {
+        console.error('getAuthToken failed:', chrome.runtime.lastError?.message);
+        reject(new Error('Failed to get Google authentication token. Please try signing in again.'));
+      } else {
+        resolve(token);
+      }
     });
-
-    const url = new URL(responseUrl);
-    const authCode = url.searchParams.get('code');
-
-    if (!authCode) {
-        throw new Error("Could not extract authorization code from response.");
-    }
-
-    // 3. Exchange authorization code for an access token
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-            code: authCode,
-            client_id: clientId,
-            client_secret: clientSecret,
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code'
-        })
-    });
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-        throw new Error(`Failed to exchange auth code for token: ${tokenData.error_description || 'Unknown error'}`);
-    }
-
-    // The access_token can now be used for API calls.
-    // Note: This flow doesn't handle token refreshing. It re-authenticates each time.
-    // For a production extension, you would store and refresh the refresh_token.
-    return tokenData.access_token;
-}
-
-/**
- * Finds the ID of a folder by its name in Google Drive.
- * @param {string} folderName The name of the folder to find.
- * @returns {Promise<string>} The folder ID.
- * @throws {Error} Throws specific errors for different failure modes.
- */
-async function findFolderId(folderName) {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (response.status === 403) {
-      // API permission denied.
-      throw new Error('DRIVE_API_FORBIDDEN');
-    }
-    if (!response.ok) {
-      throw new Error(`Google Drive API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.files && data.files.length > 0) {
-      console.log(`Found folder '${folderName}' with ID: ${data.files[0].id}`);
-      return data.files[0].id;
-    } else {
-      // Folder doesn't exist.
-      throw new Error('DRIVE_FOLDER_NOT_FOUND');
-    }
-  } catch (error) {
-    // Re-throw specific errors, otherwise throw a generic one.
-    if (error.message.startsWith('DRIVE_')) {
-      throw error;
-    }
-    console.error(`Error finding folder '${folderName}':`, error);
-    throw new Error('DRIVE_UNKNOWN_ERROR');
-  }
+  });
 }
 
 /**
  * Fetches the content of a Google Doc file by its ID.
  * @param {string} fileId The ID of the Google Doc.
- * @returns {Promise<string|null>} The text content of the file with images and descriptions.
+ * @returns {Promise<string|null>} The text content of the file.
  */
 async function getRuleFileContent(fileId) {
   try {
     const token = await getAuthToken();
-    
-    // First try to export as HTML to capture images and rich content
-    let response = await fetch(`https://www.googleapis.com/drive/v3s/${fileId}/export?mimeType=text/html`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      const htmlContent = await response.text();
-      
-      // Extract text content from HTML while preserving image descriptions
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlContent, 'text/html');
-      
-      // Extract text content
-      let textContent = doc.body.textContent || doc.body.innerText || ''; 
-      // Extract image descriptions and alt text
-      const images = doc.querySelectorAll('img');
-      let imageDescriptions = '';
-      images.forEach((img, index) => {
-        const alt = img.alt || img.title || `Image ${index + 1}`;
-        const src = img.src || '';
-        imageDescriptions += `\nImage ${index + 1}: ${alt}`;
-        if (src) {
-          imageDescriptions += ` (URL: ${src})`;
-        }
-      });
-      
-      // Combine text content with image descriptions
-      const fullContent = textContent + imageDescriptions;
-      // Clean up whitespace and normalize the text for better AI processing
-      const cleanedContent = fullContent.replace(/\s+/g, ' ').trim();
-      console.log(`Successfully extracted and cleaned HTML content with ${images.length} images for file ID ${fileId}`);
-      return cleanedContent;
-    }
-    
-    // Fallback to plain text if HTML export fails
-    console.log(`HTML export failed for file ID ${fileId}, falling back to plain text`);
-    response = await fetch(`https://www.googleapis.com/drive/v3s/${fileId}/export?mimeType=text/plain`, {
+    // Using export as plain text is the most reliable for AI processing.
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
     const textContent = await response.text();
-    const cleanedText = textContent.replace(/\s+/g, ' ').trim();
-    console.log(`Successfully extracted and cleaned plain text content for file ID ${fileId}`);
-    return cleanedText;
-    
+    return textContent.replace(/\s+/g, ' ').trim();
   } catch (error) {
     console.error(`Error fetching content for file ID ${fileId}:`, error);
     return null; // Return null to indicate failure for a single file
@@ -182,33 +44,30 @@ async function getRuleFileContent(fileId) {
 }
 
 /**
- * Fetches all policy rules from the designated folder in Google Drive.
+ * Fetches all policy rule documents from a specified folder in Google Drive.
  * @returns {Promise<string>} A single string containing all concatenated rule document contents.
- * @throws {Error} Throws specific errors for different failure modes.
  */
 export async function fetchAllRules() {
-  // findFolderId will throw an error if it fails, which will be caught by the caller.
-  const folderId = await findFolderId(FOLDER_NAME);
+    const { settings } = await chrome.storage.local.get('settings');
+    const folderId = settings?.googleFolderId;
+    
+    if (!folderId) {
+        throw new Error('Google Drive Folder ID is not set in the settings.');
+    }
 
-  try {
     const token = await getAuthToken();
     const response = await fetch(`https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (response.status === 403) {
-      // This could happen if the folder is found but files inside are not accessible.
-      throw new Error('DRIVE_API_FORBIDDEN');
-    }
     if (!response.ok) {
       throw new Error(`Google Drive API request failed with status ${response.status}`);
     }
 
     const data = await response.json();
     if (!data.files || data.files.length === 0) {
-      console.warn(`No rule documents found in folder '${FOLDER_NAME}'.`);
-      // Folder exists but is empty.
-      throw new Error('DRIVE_NO_RULES_FOUND');
+      console.warn(`No rule documents found in folder with ID: ${folderId}.`);
+      return ''; // Return empty string if no files are found
     }
 
     let allRulesContent = "";
@@ -218,70 +77,36 @@ export async function fetchAllRules() {
         allRulesContent += `<policy_document name="${file.name}">\n${content}\n</policy_document>\n\n`;
       }
     }
-    console.log('Successfully fetched and concatenated all rule files.');
-    console.log('Final rules content length:', allRulesContent.length);
-    console.log('Rules content preview:', allRulesContent.substring(0, 500));
     return allRulesContent;
-
-  } catch (error) {
-    // Re-throw specific errors, otherwise throw a generic one.
-    if (error.message.startsWith('DRIVE_')) {
-      throw error;
-    }
-    console.error('Error fetching rule files from folder:', error);
-    throw new Error('DRIVE_UNKNOWN_ERROR');
-  }
 }
 
 /**
  * Fetches the centralized configuration file (xrefhub_config.json) from Google Drive.
  * @returns {Promise<object>} The parsed JSON configuration object.
- * @throws {Error} If the file is not found, is empty, or cannot be parsed.
  */
 export async function fetchConfiguration() {
   const CONFIG_FILE_NAME = 'xrefhub_config.json';
+  const token = await getAuthToken();
 
-  try {
-    const token = await getAuthToken();
+  const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${CONFIG_FILE_NAME}' and trashed=false&spaces=drive&fields=files(id,name)`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
 
-    // 1. Find the configuration file by name
-    const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${CONFIG_FILE_NAME}' and trashed=false&spaces=drive&fields=files(id,name)`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+  if (!findResponse.ok) throw new Error('Failed to search for config file.');
 
-    if (!findResponse.ok) {
-      throw new Error(`Failed to search for config file. Status: ${findResponse.status}`);
-    }
-
-    const findData = await findResponse.json();
-    if (!findData.files || findData.files.length === 0) {
-      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" not found in your Google Drive.`);
-    }
-
-    const fileId = findData.files[0].id;
-
-    // 2. Download the file content
-    const downloadResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (!downloadResponse.ok) {
-      throw new Error(`Failed to download config file content. Status: ${downloadResponse.status}`);
-    }
-
-    const content = await downloadResponse.text();
-    if (!content) {
-      throw new Error(`Configuration file "${CONFIG_FILE_NAME}" is empty.`);
-    }
-
-    // 3. Parse and return the JSON content
-    return JSON.parse(content);
-
-  } catch (error) {
-    console.error('Error fetching configuration from Drive:', error);
-    // Re-throw to be handled by the caller
-    throw error;
+  const findData = await findResponse.json();
+  if (!findData.files || findData.files.length === 0) {
+    throw new Error(`Configuration file "${CONFIG_FILE_NAME}" not found in your Google Drive.`);
   }
+
+  const fileId = findData.files[0].id;
+  const downloadResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!downloadResponse.ok) throw new Error('Failed to download config file.');
+
+  return await downloadResponse.json();
 }
 
 /**
@@ -289,7 +114,6 @@ export async function fetchConfiguration() {
  * @returns {Promise<object>} The user's profile object, containing name, email, etc.
  */
 export async function fetchGoogleUserProfile() {
-  try {
     const token = await getAuthToken();
     const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -298,11 +122,5 @@ export async function fetchGoogleUserProfile() {
     if (!response.ok) {
       throw new Error(`Failed to fetch user profile. Status: ${response.status}`);
     }
-
-    const profile = await response.json();
-    return profile;
-  } catch (error) {
-    console.error('Error fetching Google user profile:', error);
-    throw error;
-  }
+    return await response.json();
 } 
