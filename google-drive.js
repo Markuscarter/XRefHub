@@ -5,19 +5,82 @@
 const FOLDER_NAME = 'Policy and Labels Enforcement';
 
 /**
- * Gets an OAuth 2.0 token from the Chrome Identity API.
+ * Gets an OAuth 2.0 token by performing a manual auth flow.
+ * This is necessary because we are storing the client secret in chrome.storage
+ * instead of a file, which prevents the standard chrome.identity.getAuthToken from working.
  * @returns {Promise<string>} The OAuth token.
  */
 async function getAuthToken() {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (token) => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve(token);
-      }
+    // 1. Get client credentials from storage
+    const storedSettings = await new Promise(resolve => chrome.storage.local.get('settings', resolve));
+    const clientSecretJson = storedSettings?.settings?.googleClientSecret;
+
+    if (!clientSecretJson) {
+        throw new Error("Google OAuth credentials not found. Please go to the settings page and paste your client_secret.json content.");
+    }
+
+    const credentials = JSON.parse(clientSecretJson);
+    const clientId = credentials.installed.client_id;
+    const clientSecret = credentials.installed.client_secret;
+    const redirectUri = chrome.identity.getRedirectURL();
+    const scopes = [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets"
+    ].join(' ');
+
+    // 2. Launch web auth flow to get an authorization code
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${clientId}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&access_type=offline`;
+
+    const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({
+            url: authUrl,
+            interactive: true
+        }, (responseUrl) => {
+            if (chrome.runtime.lastError || !responseUrl) {
+                reject(new Error(chrome.runtime.lastError?.message || "Authentication flow failed."));
+            } else {
+                resolve(responseUrl);
+            }
+        });
     });
-  });
+
+    const url = new URL(responseUrl);
+    const authCode = url.searchParams.get('code');
+
+    if (!authCode) {
+        throw new Error("Could not extract authorization code from response.");
+    }
+
+    // 3. Exchange authorization code for an access token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+            code: authCode,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code'
+        })
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+        throw new Error(`Failed to exchange auth code for token: ${tokenData.error_description || 'Unknown error'}`);
+    }
+
+    // The access_token can now be used for API calls.
+    // Note: This flow doesn't handle token refreshing. It re-authenticates each time.
+    // For a production extension, you would store and refresh the refresh_token.
+    return tokenData.access_token;
 }
 
 /**

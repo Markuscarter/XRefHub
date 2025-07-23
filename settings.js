@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const groqApiKeyInput = document.getElementById('groq-api-key');
     const googleSheetIdInput = document.getElementById('google-sheet-id');
     const googleFolderIdInput = document.getElementById('google-folder-id');
+    const googleClientSecretInput = document.getElementById('google-client-secret');
 
     let selectedProvider = 'gemini'; // Default provider
 
@@ -18,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (result.settings) {
-                const { provider, username, chatgptApiKey, groqApiKey, googleSheetId, googleFolderId } = result.settings;
+                const { provider, username, chatgptApiKey, groqApiKey, googleSheetId, googleFolderId, googleClientSecret } = result.settings;
                 
                 selectedProvider = provider || 'gemini';
                 updateProviderSelection();
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 groqApiKeyInput.value = groqApiKey || '';
                 googleSheetIdInput.value = googleSheetId || '';
                 googleFolderIdInput.value = googleFolderId || '';
+                googleClientSecretInput.value = googleClientSecret || '';
             } else {
                 // Set default if no settings are found
                 updateProviderSelection();
@@ -63,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
             groqApiKey: groqApiKeyInput.value.trim(),
             googleSheetId: googleSheetIdInput.value.trim(),
             googleFolderId: googleFolderIdInput.value.trim(),
+            googleClientSecret: googleClientSecretInput.value.trim(),
         };
 
         chrome.storage.local.set({ settings }, () => {
