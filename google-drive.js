@@ -13,15 +13,13 @@ const FOLDER_NAME = 'Policy and Labels Enforcement';
 async function getAuthToken() {
     // 1. Get client credentials from storage
     const storedSettings = await new Promise(resolve => chrome.storage.local.get('settings', resolve));
-    const clientSecretJson = storedSettings?.settings?.googleClientSecret;
+    const clientId = storedSettings?.settings?.googleClientId;
+    const clientSecret = storedSettings?.settings?.googleClientSecret;
 
-    if (!clientSecretJson) {
-        throw new Error("Google OAuth credentials not found. Please go to the settings page and paste your client_secret.json content.");
+    if (!clientId || !clientSecret) {
+        throw new Error("Google Client ID or Secret not found. Please go to the settings page and enter your credentials.");
     }
 
-    const credentials = JSON.parse(clientSecretJson);
-    const clientId = credentials.installed.client_id;
-    const clientSecret = credentials.installed.client_secret;
     const redirectUri = chrome.identity.getRedirectURL();
     const scopes = [
         "https://www.googleapis.com/auth/drive.readonly",
