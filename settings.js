@@ -169,7 +169,14 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGoogleStatus('connected', `Connected as ${profile.name}`);
         } catch (error) {
             console.warn('Silent sign-in failed:', error.message);
-            updateGoogleStatus('disconnected');
+            
+            // Provide specific guidance for OAuth client ID errors
+            if (error.message.includes('bad client id')) {
+                updateGoogleStatus('error', 'OAuth configuration issue. Please check the instructions.');
+                console.error('OAuth Client ID Error: The client ID in manifest.json needs to be updated. See oauth-fix-instructions.md for details.');
+            } else {
+                updateGoogleStatus('disconnected');
+            }
         }
         
         // Fallback: ensure Google sign-in button is always visible
@@ -191,7 +198,14 @@ document.addEventListener('DOMContentLoaded', () => {
             animateButton(googleSigninButton, 'success');
         } catch (error) {
             console.error('Explicit sign-in failed:', error);
-            updateGoogleStatus('error', 'Sign-in failed. Please try again.');
+            
+            // Provide specific guidance for OAuth client ID errors
+            if (error.message.includes('bad client id')) {
+                updateGoogleStatus('error', 'OAuth configuration issue. Please check the instructions.');
+                console.error('OAuth Client ID Error: The client ID in manifest.json needs to be updated. See oauth-fix-instructions.md for details.');
+            } else {
+                updateGoogleStatus('error', 'Sign-in failed. Please try again.');
+            }
         }
     };
 
