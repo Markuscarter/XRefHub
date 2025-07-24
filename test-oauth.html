@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Test</title>
+</head>
+<body>
+    <h1>OAuth Configuration Test</h1>
+    <button id="test-oauth">Test OAuth</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('test-oauth').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing OAuth...';
+            
+            try {
+                // Test if Chrome identity API is available
+                if (typeof chrome === 'undefined' || !chrome.identity) {
+                    throw new Error('Chrome identity API not available');
+                }
+                
+                // Test getting auth token
+                const token = await new Promise((resolve, reject) => {
+                    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(token);
+                        }
+                    });
+                });
+                
+                resultDiv.innerHTML = `✅ OAuth working! Token received: ${token.substring(0, 20)}...`;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ OAuth failed: ${error.message}`;
+                console.error('OAuth test error:', error);
+            }
+        });
+    </script>
+</body>
+</html> 

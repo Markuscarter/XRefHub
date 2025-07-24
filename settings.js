@@ -189,11 +189,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const handleGoogleSignIn = async () => {
+        console.log('[Xrefhub Settings] Starting Google sign-in...');
         animateButton(googleSigninButton, 'loading');
         updateGoogleStatus('loading', 'Please follow the sign-in prompt...');
         try {
+            console.log('[Xrefhub Settings] Requesting auth token...');
             const token = await getAuthToken();
+            console.log('[Xrefhub Settings] Auth token received, fetching profile...');
             const profile = await fetchGoogleUserProfile();
+            console.log('[Xrefhub Settings] Profile received:', profile);
             updateGoogleStatus('connected', `Connected as ${profile.name}`);
             animateButton(googleSigninButton, 'success');
         } catch (error) {
@@ -243,11 +247,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     loadFromDriveButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Settings] Starting load from Drive...');
         animateButton(loadFromDriveButton, 'loading');
         saveStatus.textContent = 'Loading from Google Drive...';
         saveStatus.className = 'loading';
         try {
+            console.log('[Xrefhub Settings] Fetching configuration and profile...');
             const [config, userProfile] = await Promise.all([fetchConfiguration(), fetchGoogleUserProfile()]);
+            console.log('[Xrefhub Settings] Configuration loaded:', config);
+            console.log('[Xrefhub Settings] User profile loaded:', userProfile);
             usernameInput.value = userProfile.name || config.username || '';
             chatgptApiKeyInput.value = config.chatgptApiKey || '';
             groqApiKeyInput.value = config.groqApiKey || '';
@@ -288,6 +296,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initializers ---
     console.log('[Xrefhub Settings] Starting initialization...');
+    
+    // Test Chrome identity API availability
+    if (typeof chrome !== 'undefined' && chrome.identity) {
+        console.log('[Xrefhub Settings] Chrome identity API is available');
+    } else {
+        console.error('[Xrefhub Settings] Chrome identity API is not available');
+    }
+    
     loadSettings();
     checkGoogleConnection();
     
