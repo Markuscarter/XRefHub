@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix OAuth Now</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .step { background: #f8f9fa; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #007bff; }
+        .warning { background: #fff3cd; padding: 15px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #ffc107; }
+        .success { background: #d4edda; padding: 15px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #28a745; }
+        .code { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0; }
+        .button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .button:hover { background: #0056b3; }
+        .copy-btn { background: #28a745; color: white; padding: 5px 10px; border: none; border-radius: 3px; cursor: pointer; margin-left: 10px; }
+        .copy-btn:hover { background: #1e7e34; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Fix OAuth Client ID Issue</h1>
+    
+    <div class="warning">
+        <strong>Current Error:</strong> "bad client id: 1035106798421-medf7c3svu83nj4mqbeau3bkumdc5d3k.apps.googleusercontent.com"
+        <br><br>
+        This means the OAuth client ID in your manifest.json is not properly configured in Google Cloud Console.
+    </div>
+
+    <div class="step">
+        <h3>Step 1: Get Your Extension ID</h3>
+        <p>1. Open Chrome and go to: <span class="code">chrome://extensions/</span></p>
+        <p>2. Enable "Developer mode" (toggle in top right)</p>
+        <p>3. Find "Xrefhub" in the list</p>
+        <p>4. Copy the "ID" field (it looks like: <code>abcdefghijklmnopqrstuvwxyz123456</code>)</p>
+        
+        <button class="button" onclick="openExtensions()">Open Extensions Page</button>
+        <button class="button" onclick="copyExtensionsUrl()">Copy Extensions URL</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Create New Google Cloud Project</h3>
+        <p>1. Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></p>
+        <p>2. Click "Select a project" → "New Project"</p>
+        <p>3. Name it "Xrefhub-Extension"</p>
+        <p>4. Click "Create"</p>
+        
+        <button class="button" onclick="openGoogleCloud()">Open Google Cloud Console</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Enable Required APIs</h3>
+        <p>In your new project, go to "APIs & Services" → "Library" and enable:</p>
+        <ul>
+            <li>Google Drive API</li>
+            <li>Google Sheets API</li>
+            <li>Google+ API</li>
+        </ul>
+        
+        <button class="button" onclick="openApiLibrary()">Open API Library</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 4: Create OAuth Consent Screen</h3>
+        <p>1. Go to "APIs & Services" → "OAuth consent screen"</p>
+        <p>2. Choose "External" user type</p>
+        <p>3. Fill in:</p>
+        <ul>
+            <li>App name: "Xrefhub"</li>
+            <li>User support email: Your email</li>
+            <li>Developer contact information: Your email</li>
+        </ul>
+        <p>4. Add scopes:</p>
+        <div class="code">
+            https://www.googleapis.com/auth/drive.readonly<br>
+            https://www.googleapis.com/auth/spreadsheets<br>
+            https://www.googleapis.com/auth/userinfo.email<br>
+            https://www.googleapis.com/auth/userinfo.profile
+        </div>
+        
+        <button class="button" onclick="openOAuthConsent()">Open OAuth Consent Screen</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 5: Create OAuth Client ID</h3>
+        <p>1. Go to "APIs & Services" → "Credentials"</p>
+        <p>2. Click "Create Credentials" → "OAuth 2.0 Client IDs"</p>
+        <p>3. Choose "Chrome Extension" as application type</p>
+        <p>4. Enter your extension ID from Step 1</p>
+        <p>5. Click "Create"</p>
+        <p>6. Copy the new client ID</p>
+        
+        <button class="button" onclick="openCredentials()">Open Credentials</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 6: Update Manifest.json</h3>
+        <p>Replace the client ID in your manifest.json file:</p>
+        <div class="code" id="manifest-example">
+"oauth2": {
+    "client_id": "YOUR_NEW_CLIENT_ID_HERE",
+    "scopes": [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "openid"
+    ]
+}
+        </div>
+        <button class="copy-btn" onclick="copyManifestExample()">Copy Example</button>
+    </div>
+
+    <div class="step">
+        <h3>Step 7: Test the Fix</h3>
+        <p>1. Reload the extension in Chrome</p>
+        <p>2. Open the settings page</p>
+        <p>3. Click "Sign In with Google"</p>
+        <p>4. Should now work without the "bad client id" error</p>
+        
+        <button class="button" onclick="openExtensions()">Reload Extension</button>
+    </div>
+
+    <div class="success">
+        <h3>✅ Quick Test</h3>
+        <p>If you want to test if your extension ID is correct:</p>
+        <button class="button" onclick="testExtensionAccess()">Test Extension Access</button>
+        <div id="test-result"></div>
+    </div>
+
+    <script>
+        function openExtensions() {
+            window.open('chrome://extensions/', '_blank');
+        }
+        
+        function copyExtensionsUrl() {
+            navigator.clipboard.writeText('chrome://extensions/');
+            alert('Extensions URL copied to clipboard!');
+        }
+        
+        function openGoogleCloud() {
+            window.open('https://console.cloud.google.com/', '_blank');
+        }
+        
+        function openApiLibrary() {
+            window.open('https://console.cloud.google.com/apis/library', '_blank');
+        }
+        
+        function openOAuthConsent() {
+            window.open('https://console.cloud.google.com/apis/credentials/consent', '_blank');
+        }
+        
+        function openCredentials() {
+            window.open('https://console.cloud.google.com/apis/credentials', '_blank');
+        }
+        
+        function copyManifestExample() {
+            const example = document.getElementById('manifest-example').textContent;
+            navigator.clipboard.writeText(example);
+            alert('Manifest example copied to clipboard!');
+        }
+        
+        function testExtensionAccess() {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                resultDiv.innerHTML = '✅ Chrome extension API is available';
+            } else {
+                resultDiv.innerHTML = '❌ Chrome extension API not available (this is normal if viewing outside the extension)';
+            }
+        }
+    </script>
+</body>
+</html> 
