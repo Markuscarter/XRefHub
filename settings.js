@@ -1,6 +1,17 @@
 import { fetchConfiguration, fetchGoogleUserProfile, getAuthToken } from './google-drive.js';
 
+// Add error handling for module loading
+window.addEventListener('error', (event) => {
+    console.error('[Xrefhub Settings] Module error:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Xrefhub Settings] Unhandled promise rejection:', event.reason);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Xrefhub Settings] DOM loaded, initializing...');
+    
     // --- DOM Elements ---
     const providerCards = document.querySelectorAll('.provider-card');
     const saveButton = document.getElementById('save-button');
@@ -160,6 +171,14 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Silent sign-in failed:', error.message);
             updateGoogleStatus('disconnected');
         }
+        
+        // Fallback: ensure Google sign-in button is always visible
+        setTimeout(() => {
+            if (googleSigninButton.style.display === 'none') {
+                console.log('[Xrefhub Settings] Making Google sign-in button visible');
+                googleSigninButton.style.display = 'block';
+            }
+        }, 2000);
     };
     
     const handleGoogleSignIn = async () => {
@@ -254,6 +273,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Initializers ---
+    console.log('[Xrefhub Settings] Starting initialization...');
     loadSettings();
     checkGoogleConnection();
+    
+    // Ensure buttons are enabled after a short delay if Google connection fails
+    setTimeout(() => {
+        if (saveButton.disabled && loadFromDriveButton.disabled) {
+            console.log('[Xrefhub Settings] Enabling buttons after timeout');
+            saveButton.disabled = false;
+            loadFromDriveButton.disabled = false;
+        }
+    }, 3000);
+    
+    console.log('[Xrefhub Settings] Initialization complete');
 }); 
