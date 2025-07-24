@@ -81,51 +81,65 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const checkAllConnections = async () => {
+        console.log('[Xrefhub Settings] Checking all connections...');
         const settings = await chrome.storage.local.get('settings');
         const { googleSheetId, googleFolderId, chatgptApiKey, groqApiKey } = settings.settings || {};
         
-        // Check Google Drive
-        if (googleFolderId) {
-            try {
-                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${googleFolderId}`, {
-                    headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
-                });
-                if (response.ok) {
-                    updateConnectionStatus(driveStatus, 'connected', 'Google Drive', generateChecksum(googleFolderId));
-                } else {
-                    updateConnectionStatus(driveStatus, 'error', 'Drive: Invalid ID');
-                }
-            } catch (error) {
-                updateConnectionStatus(driveStatus, 'error', 'Drive: No access');
-            }
-        }
-        
-        // Check Google Sheets
-        if (googleSheetId) {
-            try {
-                const sheetId = googleSheetId.includes('/') ? 
-                    googleSheetId.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1] : googleSheetId;
-                const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, {
-                    headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
-                });
-                if (response.ok) {
-                    updateConnectionStatus(sheetsStatus, 'connected', 'Google Sheets', generateChecksum(sheetId));
-                } else {
-                    updateConnectionStatus(sheetsStatus, 'error', 'Sheets: Invalid ID');
-                }
-            } catch (error) {
-                updateConnectionStatus(sheetsStatus, 'error', 'Sheets: No access');
-            }
-        }
-        
-        // Check OpenAI API
+        // Check OpenAI API (no auth required)
         if (chatgptApiKey) {
             updateConnectionStatus(openaiStatus, 'connected', 'OpenAI API', generateChecksum(chatgptApiKey));
         }
         
-        // Check Groq API
+        // Check Groq API (no auth required)
         if (groqApiKey) {
             updateConnectionStatus(groqStatus, 'connected', 'Groq API', generateChecksum(groqApiKey));
+        }
+        
+        // Only check Google services if we have a valid token
+        try {
+            const token = await chrome.identity.getAuthToken({ interactive: false });
+            if (!token) {
+                console.log('[Xrefhub Settings] No auth token, skipping Google service checks');
+                return;
+            }
+            
+            // Check Google Drive
+            if (googleFolderId) {
+                try {
+                    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${googleFolderId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        updateConnectionStatus(driveStatus, 'connected', 'Google Drive', generateChecksum(googleFolderId));
+                    } else {
+                        updateConnectionStatus(driveStatus, 'error', 'Drive: Invalid ID');
+                    }
+                } catch (error) {
+                    console.warn('[Xrefhub Settings] Drive check failed:', error.message);
+                    updateConnectionStatus(driveStatus, 'error', 'Drive: No access');
+                }
+            }
+            
+            // Check Google Sheets
+            if (googleSheetId) {
+                try {
+                    const sheetId = googleSheetId.includes('/') ? 
+                        googleSheetId.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1] : googleSheetId;
+                    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        updateConnectionStatus(sheetsStatus, 'connected', 'Google Sheets', generateChecksum(sheetId));
+                    } else {
+                        updateConnectionStatus(sheetsStatus, 'error', 'Sheets: Invalid ID');
+                    }
+                } catch (error) {
+                    console.warn('[Xrefhub Settings] Sheets check failed:', error.message);
+                    updateConnectionStatus(sheetsStatus, 'error', 'Sheets: No access');
+                }
+            }
+        } catch (error) {
+            console.warn('[Xrefhub Settings] Auth check failed, skipping Google services:', error.message);
         }
     };
 
@@ -273,25 +287,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     saveButton.addEventListener('click', () => {
+        console.log('[Xrefhub Settings] Save button clicked');
         animateButton(saveButton, 'loading');
-        const settings = {
-            provider: selectedProvider,
-            username: usernameInput.value.trim(),
-            chatgptApiKey: chatgptApiKeyInput.value.trim(),
-            groqApiKey: groqApiKeyInput.value.trim(),
-            googleSheetId: googleSheetIdInput.value.trim(),
-            googleFolderId: googleFolderIdInput.value.trim(),
-        };
-        chrome.storage.local.set({ settings }, () => {
-            saveStatus.textContent = 'Settings saved successfully!';
-            saveStatus.className = 'success';
-            animateButton(saveButton, 'success');
-            setTimeout(() => { 
-                saveStatus.textContent = ''; 
-                saveStatus.className = '';
-            }, 3000);
-            checkAllConnections(); // Refresh connection status after saving
-        });
+        
+        try {
+            const settings = {
+                provider: selectedProvider,
+                username: usernameInput.value.trim(),
+                chatgptApiKey: chatgptApiKeyInput.value.trim(),
+                groqApiKey: groqApiKeyInput.value.trim(),
+                googleSheetId: googleSheetIdInput.value.trim(),
+                googleFolderId: googleFolderIdInput.value.trim(),
+            };
+            
+            console.log('[Xrefhub Settings] Saving settings:', settings);
+            
+            chrome.storage.local.set({ settings }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('[Xrefhub Settings] Save error:', chrome.runtime.lastError);
+                    saveStatus.textContent = `Error: ${chrome.runtime.lastError.message}`;
+                    saveStatus.className = 'error';
+                } else {
+                    console.log('[Xrefhub Settings] Settings saved successfully');
+                    saveStatus.textContent = 'Settings saved successfully!';
+                    saveStatus.className = 'success';
+                    animateButton(saveButton, 'success');
+                    
+                    // Refresh connection status after saving
+                    setTimeout(() => {
+                        checkAllConnections();
+                    }, 1000);
+                }
+                
+                setTimeout(() => { 
+                    saveStatus.textContent = ''; 
+                    saveStatus.className = '';
+                }, 3000);
+            });
+        } catch (error) {
+            console.error('[Xrefhub Settings] Save button error:', error);
+            saveStatus.textContent = `Error: ${error.message}`;
+            saveStatus.className = 'error';
+        }
     });
 
     // --- Initializers ---
@@ -304,8 +341,21 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('[Xrefhub Settings] Chrome identity API is not available');
     }
     
+    // Load settings first
     loadSettings();
-    checkGoogleConnection();
+    
+    // Check Google connection with timeout protection
+    const initTimeout = setTimeout(() => {
+        console.log('[Xrefhub Settings] Initialization timeout, enabling buttons');
+        saveButton.disabled = false;
+        loadFromDriveButton.disabled = false;
+        updateGoogleStatus('disconnected', 'Initialization timeout');
+    }, 5000);
+    
+    checkGoogleConnection().finally(() => {
+        clearTimeout(initTimeout);
+        console.log('[Xrefhub Settings] Google connection check completed');
+    });
     
     // Ensure buttons are enabled after a short delay if Google connection fails
     setTimeout(() => {
