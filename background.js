@@ -126,8 +126,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             
             if (request.action === 'scanPage') {
                 console.log('🔍 Starting page scan for tab:', request.tabId);
-                const content = await scanPage(request.tabId);
-                console.log('✅ Page scan completed, content length:', content?.adText?.length || 0);
+                const scanResult = await scanPage(request.tabId);
+                
+                // Handle error case
+                if (scanResult.error) {
+                    console.log('❌ Scan failed:', scanResult.error);
+                    sendResponse({ error: scanResult.error });
+                    return;
+                }
+                
+                // Extract content from the scan result
+                const content = scanResult.content;
+                const contentLength = content?.adText?.length || 
+                             (content?.metadata?.bodyText?.length || 0) ||
+                             (Object.values(content?.reviewContext || {}).map(r => r?.content?.length || 0).reduce((a, b) => a + b, 0));
+                console.log('✅ Page scan completed, content length:', contentLength);
                 sendResponse({ content });
             } else if (request.action === 'analyze') {
                 console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
@@ -211,12 +224,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function scanPage(tabId) {
     try {
         // First, inject and execute the scanner script
+        // Wait a moment for the page to be fully loaded
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         const results = await chrome.scripting.executeScript({
             target: { tabId },
             function: async () => {
                 // Enhanced content scanning function (inline to avoid file dependency issues)
                 async function enhancedContentScan() {
                     console.log('[Xrefhub Scanner] Starting enhanced scan...');
+                    console.log('[Xrefhub Scanner] Scanner script loaded successfully!');
+                    console.log('[Xrefhub Scanner] Page URL:', window.location.href);
+                    console.log('[Xrefhub Scanner] Page title:', document.title);
+                    console.log('[Xrefhub Scanner] Document ready state:', document.readyState);
 
                     const result = {
                         postId: 'Not found',
@@ -233,79 +253,171 @@ async function scanPage(tabId) {
                     };
 
                     try {
+                        // Safe text extraction helper
+                        const safeGetText = (element) => {
+                            try {
+                                if (element && element.innerText && typeof element.innerText === 'string') {
+                                    return element.innerText.trim();
+                                }
+                                return '';
+                            } catch (error) {
+                                console.log('[Xrefhub Scanner] Error getting text from element:', error.message);
+                                return '';
+                            }
+                        };
+
                         // --- Ad Text & Core Content ---
+                        console.log('[Xrefhub Scanner] Looking for main content...');
+                        
+                        // Try Twitter/X specific content first
                         const tweetTextElement = document.querySelector('[data-testid="tweetText"]');
-                        if (tweetTextElement && tweetTextElement.innerText) {
-                            result.adText = tweetTextElement.innerText.trim();
-                            const linkElement = tweetTextElement.querySelector('a');
-                            if (linkElement && linkElement.href) result.landingUrl = linkElement.href;
-                        } else {
-                            const article = document.querySelector('article');
-                            if (article && article.innerText) {
-                                result.adText = article.innerText.trim();
-                                const linkInArticle = article.querySelector('a');
-                                if (linkInArticle && linkInArticle.href) result.landingUrl = linkInArticle.href;
+                        if (tweetTextElement) {
+                            const text = safeGetText(tweetTextElement);
+                            if (text && text.length > 10) {
+                                result.adText = text;
+                                console.log('[Xrefhub Scanner] Found tweet text:', text.substring(0, 100) + '...');
+                                
+                                // Look for links in the tweet
+                                const linkElement = tweetTextElement.querySelector('a');
+                                if (linkElement && linkElement.href) {
+                                    result.landingUrl = linkElement.href;
+                                }
                             }
                         }
 
-                        // --- Enhanced text extraction for any content that might be useful ---
-                        const contentSelectors = [
-                            'p', 'div[class*="content"]', 'div[class*="text"]', 'span[class*="text"]',
-                            '[data-testid*="text"]', '[aria-label]', '.post', '.message', '.content'
-                        ];
-                        
-                        let allText = '';
-                        contentSelectors.forEach(selector => {
-                            const elements = document.querySelectorAll(selector);
-                            elements.forEach(el => {
-                                const text = el.innerText.trim();
-                                if (text && text.length > 20 && !allText.includes(text)) {
-                                    allText += text + '\n';
+                        // If no tweet content, try general content selectors
+                        if (result.adText === 'Not found') {
+                            const contentSelectors = [
+                                'article',
+                                '[data-testid*="text"]',
+                                '.post-content',
+                                '.content',
+                                '.text',
+                                'p',
+                                'div[class*="content"]',
+                                'div[class*="text"]'
+                            ];
+                            
+                            for (const selector of contentSelectors) {
+                                try {
+                                    const element = document.querySelector(selector);
+                                    if (element) {
+                                        const text = safeGetText(element);
+                                        if (text && text.length > 10) {
+                                            result.adText = text;
+                                            console.log('[Xrefhub Scanner] Found content with selector', selector, ':', text.substring(0, 100) + '...');
+                                            
+                                            // Look for links
+                                            const linkElement = element.querySelector('a');
+                                            if (linkElement && linkElement.href) {
+                                                result.landingUrl = linkElement.href;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                } catch (selectorError) {
+                                    console.log('[Xrefhub Scanner] Error with selector', selector, ':', selectorError.message);
+                                }
+                            }
+                        }
+
+                        // Final fallback: get page title and some body text
+                        if (result.adText === 'Not found') {
+                            console.log('[Xrefhub Scanner] No specific content found, using fallback...');
+                            
+                            const title = document.title || 'No title';
+                            let bodyText = 'No body text';
+                            
+                            if (document.body) {
+                                try {
+                                    const allText = document.body.innerText;
+                                    console.log('[Xrefhub Scanner] Raw body text length:', allText?.length || 0);
+                                    
+                                    if (allText && typeof allText === 'string' && allText.length > 0) {
+                                        // Split into lines and filter out empty lines and very short lines
+                                        const lines = allText.split('\n')
+                                            .map(line => typeof line === 'string' ? line.trim() : '')
+                                            .filter(line => line.length > 10 && line.length < 1000)
+                                            .slice(0, 10); // Take first 10 meaningful lines
+                                        
+                                        bodyText = lines.join('\n');
+                                        console.log('[Xrefhub Scanner] Processed body text length:', bodyText.length);
+                                    }
+                                } catch (bodyError) {
+                                    console.log('[Xrefhub Scanner] Error processing body text:', bodyError.message);
+                                    bodyText = 'Error processing page content';
+                                }
+                            }
+                            
+                            result.adText = `Page: ${title}\n\nContent: ${bodyText}`;
+                            console.log('[Xrefhub Scanner] Using fallback content, total length:', result.adText.length);
+                        }
+
+                        // --- Status Indicators (simplified) ---
+                        console.log('[Xrefhub Scanner] Looking for status indicators...');
+                        try {
+                            const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
+                            statusElements.forEach((el, index) => {
+                                try {
+                                    const text = safeGetText(el);
+                                    if (text && text.length < 100) {
+                                        result.statusIndicators[`status_${index}`] = { 
+                                            text, 
+                                            className: el.className || '', 
+                                            element: el.tagName.toLowerCase() 
+                                        };
+                                    }
+                                } catch (statusError) {
+                                    // Skip this element
                                 }
                             });
-                        });
-
-                        // If we haven't found good content yet, use the enhanced text
-                        if (result.adText === 'Not found' && allText.length > 50) {
-                            result.adText = allText.substring(0, 2000); // Limit length
+                        } catch (statusSectionError) {
+                            console.log('[Xrefhub Scanner] Error in status indicators section:', statusSectionError.message);
                         }
 
-                        // --- Status Indicators ---
-                        const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
-                        statusElements.forEach((el, index) => {
-                            const text = el.innerText.trim();
-                            if (text && text.length < 100) result.statusIndicators[`status_${index}`] = { text, className: el.className, element: el.tagName.toLowerCase() };
-                        });
-
-                        // --- Review-Specific Context (for work pages) ---
-                        const reviewKeywords = ['agent', 'review', 'note', 'targeting', 'bio', 'label', 'policy', 'violation'];
-                        const allElements = document.querySelectorAll('*');
-                        allElements.forEach((el, index) => {
-                            if (index > 1000) return; // Limit to prevent overwhelming
-                            const text = el.innerText;
-                            if (text && text.length > 10 && text.length < 500) {
-                                const hasReviewKeyword = reviewKeywords.some(keyword => 
-                                    text.toLowerCase().includes(keyword)
-                                );
-                                if (hasReviewKeyword) {
-                                    result.reviewContext[`review_${Object.keys(result.reviewContext).length}`] = {
-                                        content: text.trim(),
-                                        element: el.tagName.toLowerCase(),
-                                        className: el.className
+                        // --- Form Data (simplified) ---
+                        console.log('[Xrefhub Scanner] Looking for form data...');
+                        try {
+                            const formInputs = document.querySelectorAll('input, select, textarea, button');
+                            formInputs.forEach((input, index) => {
+                                try {
+                                    const key = `input_${index}`;
+                                    result.formData[key] = {
+                                        type: input.type || input.tagName.toLowerCase(),
+                                        value: input.value || safeGetText(input) || '',
+                                        placeholder: input.placeholder || '',
+                                        name: input.name || '',
+                                        id: input.id || ''
                                     };
+                                } catch (formError) {
+                                    // Skip this input
                                 }
-                            }
-                        });
+                            });
+                        } catch (formSectionError) {
+                            console.log('[Xrefhub Scanner] Error in form data section:', formSectionError.message);
+                        }
 
                         // --- Metadata ---
-                        result.metadata = {
-                            title: document.title || 'No title',
-                            url: window.location.href,
-                            timestamp: Date.now(),
-                            domain: window.location.hostname,
-                            totalElements: document.querySelectorAll('*').length,
-                            bodyText: document.body ? document.body.innerText.substring(0, 500) + '...' : 'No body'
-                        };
+                        console.log('[Xrefhub Scanner] Creating metadata...');
+                        try {
+                            result.metadata = {
+                                title: document.title || 'No title',
+                                url: window.location.href,
+                                userAgent: navigator.userAgent.substring(0, 100) + '...',
+                                timestamp: Date.now(),
+                                domain: window.location.hostname,
+                                totalElements: document.querySelectorAll('*').length,
+                                bodyText: document.body && typeof document.body.innerText === 'string' ? 
+                                    document.body.innerText.substring(0, 500) + '...' : 'No body'
+                            };
+                        } catch (metadataError) {
+                            console.log('[Xrefhub Scanner] Error creating metadata:', metadataError.message);
+                            result.metadata = {
+                                title: 'Error getting title',
+                                url: window.location.href,
+                                error: metadataError.message
+                            };
+                        }
 
                         // --- Extract Post ID (for Twitter/X posts) ---
                         try {
@@ -318,17 +430,30 @@ async function scanPage(tabId) {
                             console.warn('[Xrefhub Scanner] Could not parse Post ID from URL.');
                         }
 
-                        console.log('[Xrefhub Scanner] Scan complete.', result);
+                        console.log('[Xrefhub Scanner] Scan complete. Final adText length:', result.adText?.length || 0);
                         return result;
 
                     } catch (error) {
                         console.error('[Xrefhub Scanner] A critical error occurred during scanning:', error);
-                        return { error: `Scanner failed: ${error.message}`, adText: 'Error during scan.' };
+                        console.error('[Xrefhub Scanner] Error stack:', error.stack);
+                        return { 
+                            error: `Scanner failed: ${error.message}`, 
+                            adText: 'Error during scan.',
+                            pageUrl: window.location.href,
+                            title: document.title || 'No title'
+                        };
                     }
                 }
 
                 // Execute the scan and return the result
-                return await enhancedContentScan();
+                console.log('[Xrefhub Scanner] Starting scan execution...');
+                console.log('[Xrefhub Scanner] Document body exists:', !!document.body);
+                console.log('[Xrefhub Scanner] Document body text length:', document.body?.innerText?.length || 0);
+
+                const scanResult = await enhancedContentScan();
+                console.log('[Xrefhub Scanner] Scan completed, returning:', scanResult);
+                console.log('[Xrefhub Scanner] Final adText length:', scanResult.adText?.length || 0);
+                return scanResult;
             },
             world: 'MAIN' // Execute in the page's context for better reliability
         });
@@ -339,17 +464,32 @@ async function scanPage(tabId) {
         }
 
         // The result is often nested in an array, and the actual value is in the first element.
+        console.log('🔍 Raw scan results:', results);
+        
         if (results && results.length > 0 && results[0].result) {
-            console.log('Scan successful, returning result:', results[0].result);
-            return results[0].result;
+            const scanResult = results[0].result;
+            console.log('✅ Scan successful, returning result:', scanResult);
+            console.log('🔍 Scan result structure:', {
+                adText: scanResult.adText,
+                adTextLength: scanResult.adText?.length || 0,
+                hasReviewContext: !!scanResult.reviewContext,
+                reviewContextKeys: Object.keys(scanResult.reviewContext || {}),
+                hasMetadata: !!scanResult.metadata,
+                metadataKeys: Object.keys(scanResult.metadata || {}),
+                pageUrl: scanResult.pageUrl,
+                extractedAt: scanResult.extractedAt
+            });
+            console.log('🔍 Full scan result:', JSON.stringify(scanResult, null, 2));
+            return { content: scanResult };
         } else {
             console.error('[Xrefhub Background] Failed to retrieve content from the page. The scanner might have returned null or an empty result.');
+            console.error('Results structure:', results);
             throw new Error('Could not retrieve valid content from the page. The page structure may be unsupported or it may still be loading.');
         }
     } catch (error) {
         console.error('An unexpected error occurred during scanPage:', error);
-        // Re-throw the error so the popup can handle it.
-        throw error;
+        // Return error in expected format
+        return { error: error.message };
     }
 }
 
@@ -359,23 +499,29 @@ async function scanPage(tabId) {
  * @returns {Promise<object>} The analysis result from the AI.
  */
 export async function handleAnalysis(content, mediaUrl) {
-    // First, get the latest rules from the Google Sheet.
-    // This makes our AI context-aware of the current labels.
-    const labelsData = await getLabelsFromSheet();
+    let rules = '';
     
-    // We'll format the labels as a simple string for the prompt.
-    // This could be improved to include descriptions if available.
-    let rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    // Try to get rules from Google Sheet first
+    try {
+        const labelsData = await getLabelsFromSheet();
+        rules = labelsData.map(label => `- ${label.name}`).join('\n');
+        console.log('Using sheet rules for analysis');
+    } catch (error) {
+        console.log('Sheet rules not available, using basic rules:', error.message);
+        rules = 'Basic content analysis rules:\n- Check for inappropriate content\n- Verify accuracy\n- Assess tone and context';
+    }
     
     // Try to get enhanced rules from Google Drive if available
     try {
         const driveRules = await fetchAllRules();
-        if (driveRules) {
+        if (driveRules && driveRules.trim().length > 0) {
             rules = driveRules + '\n\n--- Sheet Labels ---\n' + rules;
             console.log('Enhanced analysis using both Drive and Sheet rules');
+        } else {
+            console.log('No Drive rules available, using Sheet rules only');
         }
     } catch (error) {
-        console.log('Using sheet rules only (Drive not available):', error.message);
+        console.log('Drive rules not available, continuing with available rules:', error.message);
     }
     
     const analysis = await analyzePost(content, mediaUrl, rules);
@@ -388,18 +534,29 @@ export async function handleAnalysis(content, mediaUrl) {
  * @returns {Promise<string>} The detailed analysis text.
  */
 async function getDeeperAnalysis(content, mediaUrl) {
-    const labelsData = await getLabelsFromSheet();
-    let rules = labelsData.map(label => `- ${label.name}`).join('\n');
+    let rules = '';
+    
+    // Try to get rules from Google Sheet first
+    try {
+        const labelsData = await getLabelsFromSheet();
+        rules = labelsData.map(label => `- ${label.name}`).join('\n');
+        console.log('Using sheet rules for deeper analysis');
+    } catch (error) {
+        console.log('Sheet rules not available, using basic rules for deeper analysis:', error.message);
+        rules = 'Basic content analysis rules:\n- Check for inappropriate content\n- Verify accuracy\n- Assess tone and context';
+    }
     
     // Try to get enhanced rules from Google Drive if available
     try {
         const driveRules = await fetchAllRules();
-        if (driveRules) {
+        if (driveRules && driveRules.trim().length > 0) {
             rules = driveRules + '\n\n--- Sheet Labels ---\n' + rules;
             console.log('Enhanced deeper analysis using both Drive and Sheet rules');
+        } else {
+            console.log('No Drive rules available for deeper analysis, using Sheet rules only');
         }
     } catch (error) {
-        console.log('Using sheet rules only for deeper analysis (Drive not available):', error.message);
+        console.log('Drive rules not available for deeper analysis, continuing with available rules:', error.message);
     }
     
     const analysis = await getDeeperAnalysisFromAI(content, mediaUrl, rules);

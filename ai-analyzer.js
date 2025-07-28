@@ -9,13 +9,21 @@ async function getAiProvider() {
 async function getApiKey(provider) {
     return new Promise((resolve) => {
         chrome.storage.local.get(['settings'], (result) => {
-            if (provider === 'chatgpt') {
+            if (provider === 'gemini') {
+                resolve(result.settings?.geminiApiKey);
+            } else if (provider === 'chatgpt') {
                 resolve(result.settings?.chatgptApiKey);
-            } else if (provider === 'groq') {
-                resolve(result.settings?.groqApiKey);
             } else {
                 resolve(null);
             }
+        });
+    });
+}
+
+async function getGrockToken() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['grockToken'], (result) => {
+            resolve(result.grockToken || null);
         });
     });
 }
@@ -54,14 +62,17 @@ export async function analyzePost(postContent, mediaUrl, rules) {
 
     try {
         if (provider === 'gemini') {
-            // Gemini uses Google's authentication, no separate API key needed here
-            return await callGoogleGenerativeAI(prompt);
+            const apiKey = await getApiKey('gemini');
+            if (!apiKey) throw new Error('Gemini API key not set.');
+            console.log('[AI Analyzer] Using Gemini API with key:', apiKey.substring(0, 10) + '...');
+            return await callGeminiAPI(prompt, apiKey);
         } else if (provider === 'chatgpt') {
             if (!apiKey) throw new Error('ChatGPT API key not set.');
             return await callOpenAI(prompt, apiKey);
-        } else if (provider === 'groq') {
-            if (!apiKey) throw new Error('Groq API key not set.');
-            return await callGroq(prompt, apiKey);
+        } else if (provider === 'grock') {
+            const token = await getGrockToken();
+            if (!token) throw new Error('Grock not signed in. Please sign in with X first.');
+            return await callGrock(prompt, token);
         }
     } catch (error) {
         console.error(`Error analyzing post with ${provider}:`, error);
@@ -95,14 +106,17 @@ export async function getDeeperAnalysis(postContent, mediaUrl, rules) {
 
     try {
         if (provider === 'gemini') {
-            const result = await callGoogleGenerativeAI(prompt, false);
+            const apiKey = await getApiKey('gemini');
+            if (!apiKey) throw new Error('Gemini API key not set.');
+            const result = await callGeminiAPI(prompt, apiKey, false);
             return result; // Return the full text content
         } else if (provider === 'chatgpt') {
             if (!apiKey) throw new Error('ChatGPT API key not set.');
             return await callOpenAIWithMessages([{ role: "user", content: prompt }], apiKey, false);
-        } else if (provider === 'groq') {
-            if (!apiKey) throw new Error('Groq API key not set.');
-            return await callGroqWithMessages([{ role: "user", content: prompt }], apiKey, false);
+        } else if (provider === 'grock') {
+            const token = await getGrockToken();
+            if (!token) throw new Error('Grock not signed in. Please sign in with X first.');
+            return await callGrockWithMessages([{ role: "user", content: prompt }], token, false);
         }
     } catch (error) {
         console.error(`Error in getDeeperAnalysis with ${provider}:`, error);
@@ -130,16 +144,19 @@ export async function getChatReply(message, history) {
 
     try {
         if (provider === 'gemini') {
+            const apiKey = await getApiKey('gemini');
+            if (!apiKey) throw new Error('Gemini API key not set.');
             // Re-using analyzePost prompt structure for Gemini chat for now
             const geminiPrompt = `System: ${systemPrompt}\n\nHistory: ${JSON.stringify(history)}\n\nUser: ${message}`;
-            const result = await callGoogleGenerativeAI(geminiPrompt, false);
+            const result = await callGeminiAPI(geminiPrompt, apiKey, false);
             return result.resolution; // Extract the text part
         } else if (provider === 'chatgpt') {
             if (!apiKey) throw new Error('ChatGPT API key not set.');
             return await callOpenAIWithMessages(messages, apiKey, false);
-        } else if (provider === 'groq') {
-            if (!apiKey) throw new Error('Groq API key not set.');
-            return await callGroqWithMessages(messages, apiKey, false);
+        } else if (provider === 'grock') {
+            const token = await getGrockToken();
+            if (!token) throw new Error('Grock not signed in. Please sign in with X first.');
+            return await callGrockWithMessages(messages, token, false);
         }
     } catch (error) {
         console.error(`Error getting chat reply with ${provider}:`, error);
@@ -221,51 +238,50 @@ Do not include any other text or formatting before or after the JSON object.
 
 // --- AI API Call Implementations ---
 
-async function callGoogleGenerativeAI(prompt, expectJson = true) {
-    const token = await new Promise((resolve, reject) => {
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
-            if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-            } else {
-                resolve(token);
+async function callGeminiAPI(prompt, apiKey, expectJson = true) {
+    try {
+        const model = 'gemini-1.5-flash';
+        const body = {
+            contents: [{
+                parts: [{ text: prompt }]
+            }],
+            generationConfig: {
+                maxOutputTokens: 4096,
+                temperature: 0.7
             }
+        };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
         });
-    });
 
-    const model = expectJson ? 'gemini-pro' : 'gemini-pro-vision'; // Vision model for non-JSON multimodal
-    const body = {
-        contents: [{
-            parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-            response_mime_type: expectJson ? "application/json" : "text/plain",
-            maxOutputTokens: 4096, // Increased token limit
+                       if (!response.ok) {
+                   const errorText = await response.text();
+                   console.error('Gemini API Error Response:', errorText);
+                   try {
+                       const errorBody = JSON.parse(errorText);
+                       throw new Error(`Gemini API error: ${errorBody.error?.message || response.statusText}`);
+                   } catch (parseError) {
+                       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+                   }
+               }
+
+        const data = await response.json();
+        const content = data.candidates[0].content.parts[0].text;
+        console.log('Raw Gemini API Response content:', content);
+        
+        if (expectJson) {
+            return extractAndParseJson(content);
         }
-    };
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-        const errorBody = await response.json();
-        console.error('Google AI API Error:', errorBody);
-        throw new Error(`Google AI API error: ${errorBody.error?.message || response.statusText}`);
+        return content;
+    } catch (error) {
+        console.error('Gemini API Error:', error);
+        throw new Error(`Gemini API error: ${error.message}`);
     }
-
-    const data = await response.json();
-    const content = data.candidates[0].content.parts[0].text;
-    console.log('Raw Google AI Response content:', content);
-    
-    if (expectJson) {
-        return extractAndParseJson(content);
-    }
-    return content;
 }
 
 async function callOpenAI(prompt, apiKey) {
@@ -298,33 +314,44 @@ async function callOpenAIWithMessages(messages, apiKey, expectJson = true) {
     return expectJson ? extractAndParseJson(content) : content;
 }
 
-async function callGroq(prompt, apiKey) {
-    return callGroqWithMessages([{ role: "user", content: prompt }], apiKey);
+
+
+async function callGrock(prompt, token) {
+    return callGrockWithMessages([{ role: "user", content: prompt }], token);
 }
 
-async function callGroqWithMessages(messages, apiKey, expectJson = true) {
+async function callGrockWithMessages(messages, token, expectJson = true) {
+    // Use X's Grock API endpoint
     const body = {
-        model: "llama3-8b-8192", 
+        model: "grock-beta", 
         messages: messages,
-        max_tokens: 4096, // Increased token limit
+        max_tokens: 4096,
+        temperature: 0.7
     };
 
     if (expectJson) {
         body.response_format = { "type": "json_object" };
     }
     
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${token}`,
+            'X-API-Version': '2024-01-01'
         },
         body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`Groq API error: ${response.statusText}`);
+    
+    if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Grock API error response:', errorData);
+        throw new Error(`Grock API error: ${response.status} - ${response.statusText}`);
+    }
+    
     const data = await response.json();
     const content = data.choices[0].message.content;
-    console.log('Raw Groq Response content:', content);
+    console.log('Raw Grock Response content:', content);
     return expectJson ? extractAndParseJson(content) : content;
 }
 

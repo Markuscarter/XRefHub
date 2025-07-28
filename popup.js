@@ -1,11 +1,16 @@
 /**
- * @file Manages the logic for the popup UI, now with an automated workflow.
+ * @file Enhanced popup with improved content scraping and analysis workflow
+ * @version 2.0.0
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Xrefhub Popup] Initializing enhanced popup...');
+    
     // --- Element Selectors ---
     const analyzeButton = document.getElementById('analyze-button');
     const deeperAnalysisButton = document.getElementById('deeper-analysis-button');
+    const testScanButton = document.getElementById('test-scan-button');
+    const debugScanButton = document.getElementById('debug-scan-button');
     const copyButton = document.getElementById('copy-button');
     const submitButton = document.getElementById('submit-button');
     const postContent = document.getElementById('post-content');
@@ -20,390 +25,560 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatSendButton = document.getElementById('chat-send-button');
     const chatLog = document.getElementById('chat-log');
     
-    let currentAnalysis = {}; // Store the latest analysis
-    let chatHistory = []; // Store the conversation history
+    // --- State Management ---
+    let currentAnalysis = {};
+    let chatHistory = [];
+    let currentTab = null;
+    let scanData = null;
 
-    // --- Initial State & Page Scan ---
-    async function initialize() {
-        setLoadingState(true, 'Scanning page...');
+    // --- Enhanced Content Scraping ---
+    async function enhancedPageScan() {
+        console.log('[Xrefhub Popup] Starting enhanced page scan...');
+        
         try {
-            const activeTab = await getActiveTab();
-            if (activeTab && activeTab.url && !activeTab.url.startsWith('chrome://')) {
-                // Add timeout protection for the scan message
-                const response = await Promise.race([
-                    chrome.runtime.sendMessage({ action: 'scanPage', tabId: activeTab.id }),
-                    new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Scan timeout after 10 seconds')), 10000)
-                    )
-                ]);
+            // Get current active tab
+            currentTab = await getActiveTab();
+            if (!currentTab || !currentTab.url) {
+                throw new Error('No active tab found');
+            }
+
+            // Check if we can scan this page
+            if (currentTab.url.startsWith('chrome://') || currentTab.url.startsWith('chrome-extension://')) {
+                throw new Error('Cannot scan internal browser pages');
+            }
+
+            console.log('[Xrefhub Popup] Scanning tab:', currentTab.id, 'URL:', currentTab.url);
+
+            // Perform the scan with timeout protection
+            const scanResponse = await Promise.race([
+                chrome.runtime.sendMessage({ 
+                    action: 'scanPage', 
+                    tabId: currentTab.id 
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Scan timeout after 15 seconds')), 15000)
+                )
+            ]);
+
+            console.log('[Xrefhub Popup] Raw scan response:', scanResponse);
+
+            // Validate scan response
+            if (!scanResponse) {
+                throw new Error('No response from content scanner');
+            }
+
+            if (scanResponse.error) {
+                throw new Error(`Scanner error: ${scanResponse.error}`);
+            }
+
+            if (!scanResponse.content) {
+                throw new Error('No content data in scan response');
+            }
+
+            scanData = scanResponse.content;
+            console.log('[Xrefhub Popup] Scan data captured:', {
+                adText: scanData.adText,
+                adTextLength: scanData.adText?.length || 0,
+                hasMetadata: !!scanData.metadata,
+                hasReviewContext: !!scanData.reviewContext,
+                pageUrl: scanData.pageUrl
+            });
+
+            return scanData;
+
+        } catch (error) {
+            console.error('[Xrefhub Popup] Enhanced scan failed:', error);
+            throw error;
+        }
+    }
+
+    // --- Smart Content Extraction ---
+    function extractBestContent(scanData) {
+        console.log('[Xrefhub Popup] Extracting best content from scan data...');
+        console.log('[Xrefhub Popup] Available data:', {
+            hasAdText: !!scanData.adText,
+            adTextLength: scanData.adText?.length || 0,
+            hasMetadata: !!scanData.metadata,
+            hasReviewContext: !!scanData.reviewContext,
+            reviewContextKeys: Object.keys(scanData.reviewContext || {})
+        });
+        
+        let bestContent = '';
+        let contentSource = '';
+
+        // Priority 1: Main adText content (most reliable)
+        if (scanData.adText && scanData.adText !== 'Not found' && scanData.adText.length > 10) {
+            bestContent = scanData.adText;
+            contentSource = 'adText';
+            console.log('[Xrefhub Popup] Using adText content, length:', bestContent.length);
+        }
+        // Priority 2: Metadata body text
+        else if (scanData.metadata?.bodyText && scanData.metadata.bodyText.length > 50) {
+            bestContent = scanData.metadata.bodyText;
+            contentSource = 'metadata.bodyText';
+            console.log('[Xrefhub Popup] Using metadata bodyText, length:', bestContent.length);
+        }
+        // Priority 3: Review context content
+        else if (scanData.reviewContext && Object.keys(scanData.reviewContext).length > 0) {
+            const reviewContent = Object.values(scanData.reviewContext)
+                .map(r => r?.content || '')
+                .filter(content => content.length > 0)
+                .join('\n\n');
+            
+            if (reviewContent.length > 50) {
+                bestContent = reviewContent;
+                contentSource = 'reviewContext';
+                console.log('[Xrefhub Popup] Using review context, length:', bestContent.length);
+            }
+        }
+        // Priority 4: Page title + any available text
+        else if (scanData.metadata?.title) {
+            const title = scanData.metadata.title;
+            const anyText = scanData.metadata.bodyText || 'No additional content available';
+            bestContent = `Page: ${title}\n\nContent: ${anyText}`;
+            contentSource = 'fallback';
+            console.log('[Xrefhub Popup] Using fallback content, length:', bestContent.length);
+        }
+        // Priority 5: Any available text from form data or other sources
+        else if (scanData.formData && Object.keys(scanData.formData).length > 0) {
+            const formContent = Object.values(scanData.formData)
+                .map(input => input?.value || '')
+                .filter(value => value && value.length > 5)
+                .join('\n');
+            
+            if (formContent.length > 20) {
+                bestContent = formContent;
+                contentSource = 'formData';
+                console.log('[Xrefhub Popup] Using form data content, length:', bestContent.length);
+            }
+        }
+
+        console.log('[Xrefhub Popup] Final extraction result:', {
+            hasContent: !!bestContent,
+            contentLength: bestContent.length,
+            source: contentSource
+        });
+
+        return { content: bestContent, source: contentSource };
+    }
+
+    // --- Enhanced Initialization ---
+    async function initialize() {
+        console.log('[Xrefhub Popup] Starting enhanced initialization...');
+        
+        setLoadingState(true, 'Scanning page for content...');
+        
+        try {
+            // Perform enhanced page scan
+            const scanData = await enhancedPageScan();
+            
+            // Extract best content
+            const { content, source } = extractBestContent(scanData);
+            
+            console.log('[Xrefhub Popup] Content extraction result:', {
+                hasContent: !!content,
+                contentLength: content?.length || 0,
+                source: source,
+                contentPreview: content?.substring(0, 100) + '...'
+            });
+            
+            if (content && content.length > 10) {
+                // Update UI with extracted content
+                postContent.value = content;
+                console.log(`[Xrefhub Popup] ✅ Content captured from ${source}, length: ${content.length}`);
                 
-                if (response && response.error) {
-                    throw new Error(response.error);
+                // Show success message
+                showToast(`Content captured from ${source}`, 'success');
+                
+                // Auto-trigger analysis for good content
+                if (content.length > 20) {
+                    console.log('[Xrefhub Popup] Auto-triggering analysis...');
+                    setTimeout(() => triggerAnalysis(), 500);
                 }
-                
-                let contentCaptured = false;
-                
-                if (response && response.content && response.content.adText && response.content.adText !== 'Not found') {
-                    postContent.value = response.content.adText;
-                    contentCaptured = true;
-                    console.log('✅ Successfully captured content:', response.content.adText.substring(0, 100) + '...');
-                } else if (response && response.content) {
-                    // Try to get any useful text from the response
-                    const reviewContent = Object.values(response.content.reviewContext || {})
-                        .map(r => r?.content || '')
-                        .filter(content => content.length > 0)
-                        .join('\n');
-                    
-                    const fallbackText = response.content.metadata?.bodyText || 
-                                       reviewContent ||
-                                       'Could not automatically scan content. Please paste it manually.';
-                    postContent.value = fallbackText;
-                    
-                    if (fallbackText !== 'Could not automatically scan content. Please paste it manually.') {
-                        contentCaptured = true;
-                        console.log('✅ Successfully captured fallback content:', fallbackText.substring(0, 100) + '...');
-                    }
-                } else {
-                    postContent.value = 'Could not automatically scan content. Please paste it manually.';
-                }
-                
-                // Automatically trigger analysis if we successfully captured content
-                if (contentCaptured && postContent.value && postContent.value.trim().length > 20) {
-                    console.log('🔄 Automatically triggering analysis...');
-                    
-                    // Small delay to ensure UI is updated
-                    setTimeout(async () => {
-                        setLoadingState(true, 'Analyzing content...');
-                        
-                        try {
-                            const analysisResponse = await Promise.race([
-                                chrome.runtime.sendMessage({
-                                    action: 'analyze',
-                                    content: postContent.value,
-                                    mediaUrl: '' // TODO: Extract media URL if possible from scanner
-                                }),
-                                new Promise((_, reject) => 
-                                    setTimeout(() => reject(new Error('Analysis timeout after 15 seconds')), 15000)
-                                )
-                            ]);
-                            
-                            if (analysisResponse) {
-                                handleAnalysisResponse(analysisResponse);
-                                console.log('✅ Analysis completed successfully');
-                            } else {
-                                throw new Error('No response received from analysis');
-                            }
-                            
-                        } catch (analysisError) {
-                            console.error('❌ Analysis failed:', analysisError);
-                            handleError(analysisError, 'Auto-analysis failed');
-                            showToast('Analysis failed, you can try the Analyze button manually', 'error');
-                        } finally {
-                            setLoadingState(false);
-                        }
-                    }, 100);
-                } else {
-                    console.log('⚠️ Content not suitable for auto-analysis, user must click Analyze button');
-                }
-                
             } else {
+                // No good content found
+                postContent.value = 'Could not automatically extract content from this page. Please paste content manually.';
+                console.log('[Xrefhub Popup] ⚠️ No suitable content found for auto-analysis');
+                console.log('[Xrefhub Popup] Scan data debug:', {
+                    adText: scanData.adText,
+                    adTextLength: scanData.adText?.length || 0,
+                    hasMetadata: !!scanData.metadata,
+                    metadataBodyText: scanData.metadata?.bodyText?.substring(0, 100),
+                    hasReviewContext: !!scanData.reviewContext,
+                    reviewContextKeys: Object.keys(scanData.reviewContext || {})
+                });
+                showToast('Please paste content manually', 'warning');
+            }
+
+        } catch (error) {
+            console.error('[Xrefhub Popup] Initialization failed:', error);
+            
+            // Set appropriate error message
+            if (error.message.includes('Cannot scan internal browser pages')) {
                 postContent.value = 'Cannot scan internal browser pages. Please paste content manually.';
                 analyzeButton.disabled = true;
+            } else {
+                postContent.value = `Scan failed: ${error.message}. Please paste content manually.`;
             }
-        } catch (error) {
-            console.error('Error during initialization:', error);
-            postContent.value = `Error: ${error.message}`;
             
-            // Show user-friendly error message
             showToast(`Scan failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
         }
     }
-    
-    // --- Event Listeners ---
-    
-    analyzeButton.addEventListener('click', async () => {
-        setLoadingState(true, 'Analyzing...');
-        try {
-            const response = await chrome.runtime.sendMessage({
-                action: 'analyze',
-                content: postContent.value,
-                mediaUrl: '' // TODO: Extract media URL if possible from scanner
-            });
-            handleAnalysisResponse(response);
-        } catch (error) {
-            handleError(error, 'Analysis failed');
-        } finally {
-            setLoadingState(false);
-        }
-    });
 
-    deeperAnalysisButton.addEventListener('click', async () => {
-        setLoadingState(true, 'Getting deeper analysis...');
-        deeperAnalysisResult.style.display = 'block';
-        deeperAnalysisResult.textContent = 'Fetching...';
+    // --- Enhanced Analysis Trigger ---
+    async function triggerAnalysis() {
+        console.log('[Xrefhub Popup] Triggering content analysis...');
+        
+        if (!postContent.value || postContent.value.trim().length < 10) {
+            showToast('Please enter content to analyze', 'warning');
+            return;
+        }
+
+        setLoadingState(true, 'Analyzing content with AI...');
+        
         try {
-            const response = await chrome.runtime.sendMessage({
-                action: 'deeperAnalysis',
-                content: postContent.value,
-                mediaUrl: '' // TODO
-            });
-            if (response.error) {
-                deeperAnalysisResult.textContent = `Error: ${response.error}`;
-            } else {
-                deeperAnalysisResult.textContent = response.deeperAnalysis;
+            const analysisResponse = await Promise.race([
+                chrome.runtime.sendMessage({
+                    action: 'analyze',
+                    content: postContent.value,
+                    mediaUrl: scanData?.landingUrl || ''
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
+                )
+            ]);
+
+            console.log('[Xrefhub Popup] Analysis response:', analysisResponse);
+
+            if (analysisResponse && analysisResponse.error) {
+                throw new Error(analysisResponse.error);
             }
+
+            if (analysisResponse) {
+                handleAnalysisResponse(analysisResponse);
+                showToast('Analysis completed successfully', 'success');
+            } else {
+                throw new Error('No response from analysis');
+            }
+
         } catch (error) {
-            handleError(error, 'Deeper analysis failed');
+            console.error('[Xrefhub Popup] Analysis failed:', error);
+            handleError(error, 'Content analysis failed');
+            showToast(`Analysis failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
         }
-    });
-
-    copyButton.addEventListener('click', () => {
-        navigator.clipboard.writeText(finalOutput.value)
-            .then(() => showToast('Copied to clipboard!'))
-            .catch(err => handleError(err, 'Failed to copy'));
-    });
-    
-    submitButton.addEventListener('click', async () => {
-        const output = finalOutput.value;
-        if (!output || submitButton.disabled) return;
-
-        setLoadingState(true, 'Submitting...');
-        submitButton.textContent = 'Submitting...';
-
-        try {
-            // The data should be an array of columns for the sheet
-            const data = output.split(' - ');
-            const response = await chrome.runtime.sendMessage({ action: 'writeToSheet', data });
-            if (response.error) throw new Error(response.error);
-            
-            showToast('Successfully submitted to sheet!');
-            submitButton.textContent = 'Success!';
-            setTimeout(() => {
-                submitButton.textContent = 'Submit to Sheet';
-            }, 2000);
-
-        } catch (error) {
-            handleError(error, 'Submission failed');
-            submitButton.textContent = 'Error!';
-        } finally {
-            setLoadingState(false);
-        }
-    });
-
-    chatSendButton.addEventListener('click', handleChat);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleChat();
-    });
-
-    openInTabButton.addEventListener('click', () => {
-        chrome.tabs.create({ url: 'popup.html' });
-    });
-
-    // --- UI Update Functions ---
-
-    function setLoadingState(isLoading, message = '') {
-        analyzeButton.disabled = isLoading;
-        analyzeButton.textContent = isLoading ? message : 'Analyze Page';
-        deeperAnalysisButton.disabled = isLoading;
     }
 
+    // --- Enhanced Analysis Response Handler ---
     function handleAnalysisResponse(response) {
-        console.log('📥 Received analysis response:', response);
+        console.log('[Xrefhub Popup] Handling analysis response...');
         
-        if (response.error) {
-            console.error('❌ Analysis response contains error:', response.error);
-            handleError(new Error(response.error), 'Analysis Error');
-            return;
-        }
-        
-        if (!response.summary && !response.resolution) {
-            console.warn('⚠️ Analysis response missing summary and resolution:', response);
-            handleError(new Error('Invalid analysis response - missing summary and resolution'), 'Analysis Error');
-            return;
-        }
-        
-        console.log('✅ Processing valid analysis response...');
         currentAnalysis = response;
-        
-        // Update UI with analysis results
-        const summary = response.summary || 'No summary provided.';
-        const resolution = response.resolution || 'No resolution provided.';
-        
-        aiSummary.textContent = summary;
-        aiResolution.textContent = resolution;
-        console.log('📝 Updated summary and resolution in UI');
-        
-        // Populate labels
-        console.log('🏷️ Populating labels:', response.suggestedLabels);
-        populateLabels(response.suggestedLabels || []);
 
-        // Add the initial analysis to the chat history as the AI's first turn
-        const chatMessage = `Initial analysis complete. Summary: ${summary}. Resolution: ${resolution}`;
-        chatHistory = [{ role: 'assistant', content: chatMessage }];
-        updateChatLog();
-        console.log('💬 Updated chat log with initial analysis');
-        
+        // Update summary
+        if (response.summary) {
+            aiSummary.textContent = response.summary;
+            aiSummary.style.display = 'block';
+        }
+
+        // Update resolution
+        if (response.resolution) {
+            aiResolution.textContent = response.resolution;
+            aiResolution.style.display = 'block';
+        }
+
+        // Populate labels
+        if (response.suggestedLabels && Array.isArray(response.suggestedLabels)) {
+            populateLabels(response.suggestedLabels);
+        }
+
         // Update final output
         updateFinalOutput();
-        console.log('📋 Updated final output field');
+
+        // Enable deeper analysis
+        deeperAnalysisButton.disabled = false;
         
-        // Show success notification
-        showToast('Analysis completed successfully!', 'success');
-        console.log('✅ Analysis handling complete');
+        console.log('[Xrefhub Popup] Analysis response handled successfully');
     }
 
+    // --- Enhanced Label Population ---
     function populateLabels(suggestedLabels) {
-        labelsContainer.innerHTML = ''; // Clear previous labels
-        chrome.storage.local.get(['labelsCache'], (result) => {
-            const allLabels = result.labelsCache?.labels || [];
-            if (allLabels.length === 0) {
-                labelsContainer.innerHTML = '<p>No labels found. Check Google Sheet settings.</p>';
-                return;
-            }
-            allLabels.forEach(label => {
-                const isSuggested = suggestedLabels.includes(label.name);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'checkbox-wrapper';
-                if (isSuggested) {
-                    wrapper.classList.add('highlighted');
-                }
-                wrapper.innerHTML = `
-                    <input type="checkbox" id="label-${label.name}" name="${label.name}" ${isSuggested ? 'checked' : ''}>
-                    <label for="label-${label.name}">${label.name}</label>
-                `;
-                wrapper.querySelector('input').addEventListener('change', updateFinalOutput);
-                labelsContainer.appendChild(wrapper);
-            });
+        console.log('[Xrefhub Popup] Populating labels:', suggestedLabels);
+        
+        labelsContainer.innerHTML = '';
+        
+        if (!suggestedLabels || suggestedLabels.length === 0) {
+            labelsContainer.innerHTML = '<p>No labels suggested for this content.</p>';
+            return;
+        }
+
+        suggestedLabels.forEach((label, index) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'label-item';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `label-${index}`;
+            checkbox.checked = true;
+            
+            const labelElement = document.createElement('label');
+            labelElement.htmlFor = `label-${index}`;
+            labelElement.textContent = label;
+            
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(labelElement);
+            labelsContainer.appendChild(wrapper);
+            
+            // Add change listener for final output updates
+            checkbox.addEventListener('change', updateFinalOutput);
         });
     }
 
+    // --- Enhanced Final Output Update ---
     function updateFinalOutput() {
-        const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked')).map(cb => cb.name);
-        const resolution = currentAnalysis.resolution || "No resolution yet.";
-        const username = "User"; // TODO: Get from settings
-        const date = new Date().toLocaleDateString();
+        console.log('[Xrefhub Popup] Updating final output...');
         
-        finalOutput.value = `${selectedLabels.join(', ')} - ${resolution} - ${username} - ${date}`;
+        const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked'))
+            .map(input => input.nextElementSibling.textContent);
+        
+        const output = {
+            content: postContent.value,
+            summary: aiSummary.textContent,
+            resolution: aiResolution.textContent,
+            labels: selectedLabels,
+            timestamp: new Date().toISOString(),
+            url: currentTab?.url || 'Unknown'
+        };
+        
+        finalOutput.value = JSON.stringify(output, null, 2);
+        console.log('[Xrefhub Popup] Final output updated');
     }
 
-    async function handleChat() {
-        const message = chatInput.value.trim();
-        if (!message) return;
+    // --- Enhanced Error Handling ---
+    function handleError(error, context) {
+        console.error(`[Xrefhub Popup] Error in ${context}:`, error);
+        
+        // Update UI to show error
+        aiSummary.textContent = `Error: ${error.message}`;
+        aiResolution.textContent = 'Analysis failed. Please try again.';
+        
+        // Disable buttons
+        deeperAnalysisButton.disabled = true;
+    }
 
-        chatHistory.push({ role: 'user', content: message });
-        updateChatLog();
-        chatInput.value = '';
-        setLoadingState(true, 'AI is thinking...');
-
-        try {
-            const activeTab = await getActiveTab();
-            const response = await chrome.runtime.sendMessage({
-                action: 'chat',
-                message: message,
-                history: chatHistory,
-                tabId: activeTab.id // Pass tabId for NBM trigger
-            });
-            if (response.error) {
-                handleError(new Error(response.error), 'Chat Error');
-            } else {
-                chatHistory.push({ role: 'assistant', content: response.reply });
-                updateChatLog();
-            }
-        } catch (error) {
-            handleError(error, 'Chat failed');
-        } finally {
-            setLoadingState(false);
+    // --- Enhanced Loading State ---
+    function setLoadingState(isLoading, message = '') {
+        const buttons = [analyzeButton, deeperAnalysisButton, testScanButton, debugScanButton, copyButton, submitButton];
+        
+        buttons.forEach(button => {
+            button.disabled = isLoading;
+        });
+        
+        if (isLoading) {
+            aiSummary.textContent = message || 'Processing...';
+            aiResolution.textContent = 'Please wait...';
         }
     }
 
-    function updateChatLog() {
-        chatLog.innerHTML = '';
-        chatHistory.forEach(msg => {
-            const msgElement = document.createElement('div');
-            msgElement.className = `chat-message ${msg.role}`;
-            
-            // Handle both string and object replies (for NBM)
-            if (typeof msg.content === 'object') {
-                msgElement.innerHTML = `<pre>${JSON.stringify(msg.content, null, 2)}</pre>`;
-            } else {
-                msgElement.textContent = msg.content;
-            }
-
-            chatLog.appendChild(msgElement);
-        });
-        chatLog.scrollTop = chatLog.scrollHeight; // Scroll to bottom
-    }
-
-    function handleError(error, context) {
-        console.error(`[${context}]`, error);
-        const errorMessage = `Error during ${context}: ${error.message}`;
-        
-        // Display error in the main UI
-        aiSummary.textContent = errorMessage;
-        aiResolution.textContent = 'An error occurred. See summary above.';
-        
-        // Also log the error in the chat for immediate visibility
-        chatHistory.push({ role: 'ai', content: `🚨 **System Error** 🚨\n\n**Context:** ${context}\n**Details:** ${error.message}` });
-        updateChatLog();
-
-        showToast(errorMessage, 'error');
-    }
-
+    // --- Enhanced Toast Notifications ---
     function showToast(message, type = 'success') {
-        // Create a toast notification element
+        console.log(`[Xrefhub Popup] Toast (${type}): ${message}`);
+        
+        // Create toast element
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        toast.textContent = message;
         toast.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: ${type === 'error' ? '#ff4757' : '#2ed573'};
-            color: white;
             padding: 12px 20px;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
             z-index: 10000;
-            font-size: 14px;
-            max-width: 300px;
-            word-wrap: break-word;
             animation: slideIn 0.3s ease-out;
+            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#ff9800'};
         `;
         
-        // Add animation styles
-        if (!document.querySelector('#toast-styles')) {
-            const styles = document.createElement('style');
-            styles.id = 'toast-styles';
-            styles.textContent = `
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-                @keyframes slideOut {
-                    from { transform: translateX(0); opacity: 1; }
-                    to { transform: translateX(100%); opacity: 0; }
-                }
-            `;
-            document.head.appendChild(styles);
-        }
-        
-        toast.textContent = message;
         document.body.appendChild(toast);
         
-        // Auto-remove after 5 seconds
+        // Remove after 3 seconds
         setTimeout(() => {
             toast.style.animation = 'slideOut 0.3s ease-in';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
-                }
-            }, 300);
-        }, 5000);
+            setTimeout(() => document.body.removeChild(toast), 300);
+        }, 3000);
+    }
+
+    // --- Event Listeners ---
+    
+    // Test scan button
+    testScanButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Popup] Test scan button clicked');
+        setLoadingState(true, 'Testing scan...');
         
-        console.log(`[Toast: ${type}] ${message}`);
+        try {
+            const scanData = await enhancedPageScan();
+            console.log('[Xrefhub Popup] Test scan successful:', scanData);
+            showToast('Scan test successful! Check console for details.', 'success');
+        } catch (error) {
+            console.error('[Xrefhub Popup] Test scan failed:', error);
+            showToast(`Test scan failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    });
+
+    // Debug scan button
+    debugScanButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Popup] Debug scan button clicked');
+        setLoadingState(true, 'Debug scanning...');
+        
+        try {
+            const scanData = await enhancedPageScan();
+            console.log('[Xrefhub Popup] Debug scan data:', scanData);
+            
+            // Extract content and show detailed debug info
+            const { content, source } = extractBestContent(scanData);
+            console.log('[Xrefhub Popup] Debug content extraction:', {
+                hasContent: !!content,
+                contentLength: content?.length || 0,
+                source: source,
+                contentPreview: content?.substring(0, 200) + '...'
+            });
+            
+            // Update the textarea with debug info
+            const debugInfo = `DEBUG SCAN RESULTS:
+            
+Content Source: ${source}
+Content Length: ${content?.length || 0}
+Has Content: ${!!content}
+
+Raw Scan Data:
+${JSON.stringify(scanData, null, 2)}
+
+Extracted Content:
+${content || 'No content extracted'}`;
+            
+            postContent.value = debugInfo;
+            showToast('Debug scan completed! Check textarea for details.', 'success');
+        } catch (error) {
+            console.error('[Xrefhub Popup] Debug scan failed:', error);
+            showToast(`Debug scan failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    });
+
+    // Analyze button
+    analyzeButton.addEventListener('click', triggerAnalysis);
+
+    // Deeper analysis button
+    deeperAnalysisButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Popup] Deeper analysis requested');
+        setLoadingState(true, 'Getting deeper analysis...');
+        
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'deeperAnalysis',
+                content: postContent.value
+            });
+            
+            if (response && response.error) {
+                throw new Error(response.error);
+            }
+            
+            deeperAnalysisResult.textContent = response || 'No deeper analysis available';
+            deeperAnalysisResult.style.display = 'block';
+            showToast('Deeper analysis completed', 'success');
+            
+        } catch (error) {
+            console.error('[Xrefhub Popup] Deeper analysis failed:', error);
+            showToast(`Deeper analysis failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    });
+
+    // Copy button
+    copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(finalOutput.value).then(() => {
+            showToast('Output copied to clipboard', 'success');
+        }).catch(() => {
+            showToast('Failed to copy to clipboard', 'error');
+        });
+    });
+
+    // Submit button
+    submitButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Popup] Submit button clicked');
+        setLoadingState(true, 'Submitting to sheet...');
+        
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'writeToSheet',
+                data: JSON.parse(finalOutput.value)
+            });
+            
+            if (response && response.error) {
+                throw new Error(response.error);
+            }
+            
+            showToast('Successfully submitted to sheet', 'success');
+            
+        } catch (error) {
+            console.error('[Xrefhub Popup] Submit failed:', error);
+            showToast(`Submit failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    });
+
+    // Chat functionality
+    chatSendButton.addEventListener('click', async () => {
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        chatInput.value = '';
+        chatHistory.push({ role: 'user', content: message });
+        updateChatLog();
+        
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'chat',
+                message,
+                history: chatHistory
+            });
+            
+            if (response && response.error) {
+                throw new Error(response.error);
+            }
+            
+            chatHistory.push({ role: 'assistant', content: response });
+            updateChatLog();
+            
+        } catch (error) {
+            console.error('[Xrefhub Popup] Chat failed:', error);
+            chatHistory.push({ role: 'assistant', content: `Error: ${error.message}` });
+            updateChatLog();
+        }
+    });
+
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            chatSendButton.click();
+        }
+    });
+
+    // Utility functions
+    function updateChatLog() {
+        chatLog.innerHTML = chatHistory.map(msg => 
+            `<div class="chat-message ${msg.role}">${msg.content}</div>`
+        ).join('');
+        chatLog.scrollTop = chatLog.scrollHeight;
     }
 
     function getActiveTab() {
@@ -414,5 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Initialize ---
+    console.log('[Xrefhub Popup] Starting initialization...');
     initialize();
 }); 

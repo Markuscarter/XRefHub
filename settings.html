@@ -25,15 +25,15 @@
                 <div class="provider-grid">
                     <div class="provider-card" data-provider="gemini">
                         <div class="provider-name">💎 Gemini</div>
-                        <div class="provider-description">Uses your Google account. No API key needed.</div>
+                        <div class="provider-description">Requires your Gemini API key.</div>
                     </div>
                     <div class="provider-card" data-provider="chatgpt">
                         <div class="provider-name">💬 ChatGPT</div>
                         <div class="provider-description">Requires your OpenAI API key.</div>
                     </div>
-                    <div class="provider-card" data-provider="groq">
-                        <div class="provider-name">🚀 Groq</div>
-                        <div class="provider-description">Requires your Groq API key.</div>
+                    <div class="provider-card" data-provider="grock">
+                        <div class="provider-name">🤖 Grock</div>
+                        <div class="provider-description">Sign in with your X account to use Grock.</div>
                     </div>
                 </div>
             </section>
@@ -45,12 +45,16 @@
                     <input type="text" id="username" class="input-field" placeholder="Enter your name or handle">
                 </div>
                 <div class="input-group">
+                    <label for="gemini-api-key">Gemini API Key</label>
+                    <input type="password" id="gemini-api-key" class="input-field" placeholder="Enter your Gemini API key">
+                </div>
+                <div class="input-group">
                     <label for="chatgpt-api-key">ChatGPT API Key</label>
                     <input type="password" id="chatgpt-api-key" class="input-field" placeholder="Enter your OpenAI API key">
                 </div>
                 <div class="input-group">
-                    <label for="groq-api-key">Groq API Key</label>
-                    <input type="password" id="groq-api-key" class="input-field" placeholder="Enter your Groq API key">
+                    <label for="grock-signin">Grock Sign-in</label>
+                    <button id="grock-signin-button" class="btn btn-primary">Sign in with X for Grock</button>
                 </div>
                 <div class="input-group">
                     <label for="google-sheet-id">Google Sheet ID</label>
@@ -68,6 +72,7 @@
                     <span id="google-status-icon">⚪️</span>
                     <span id="google-status-text">Not connected to Google</span>
                     <button id="google-signin-button" class="btn">Sign In with Google</button>
+                    <button id="google-signout-button" class="btn btn-secondary" style="display: none;">Sign Out</button>
                 </div>
                 
                 <div class="status-grid">
@@ -81,15 +86,20 @@
                         <span class="status-text">Google Sheets</span>
                         <span class="checksum" id="sheets-checksum"></span>
                     </div>
+                    <div class="connection-item" id="gemini-status">
+                        <span class="status-icon">⚪️</span>
+                        <span class="status-text">Gemini API</span>
+                        <span class="checksum" id="gemini-checksum"></span>
+                    </div>
                     <div class="connection-item" id="openai-status">
                         <span class="status-icon">⚪️</span>
                         <span class="status-text">OpenAI API</span>
                         <span class="checksum" id="openai-checksum"></span>
                     </div>
-                    <div class="connection-item" id="groq-status">
+                    <div class="connection-item" id="grock-status">
                         <span class="status-icon">⚪️</span>
-                        <span class="status-text">Groq API</span>
-                        <span class="checksum" id="groq-checksum"></span>
+                        <span class="status-text">Grock (X Sign-in)</span>
+                        <span class="checksum" id="grock-checksum"></span>
                     </div>
                 </div>
             </section>
