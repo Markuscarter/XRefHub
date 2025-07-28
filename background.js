@@ -178,6 +178,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     console.log('[❌ DRIVE ERROR]:', error.message);
                     sendResponse({ success: false, error: error.message });
                 }
+            } else if (request.action === 'getPolicyDocuments') {
+                try {
+                    console.log('[📋 POLICY] Fetching policy documents for detailed reasons...');
+                    const policies = await fetchPolicyDocuments();
+                    console.log('[✅ POLICY] Successfully fetched policy documents');
+                    sendResponse({ policies });
+                } catch (error) {
+                    console.log('[❌ POLICY ERROR]:', error.message);
+                    sendResponse({ error: error.message });
+                }
             } else if (request.action === 'chat') {
                 // Check if message is "NBM" trigger
                 if (request.message.trim().toUpperCase() === 'NBM') {
@@ -526,6 +536,42 @@ export async function handleAnalysis(content, mediaUrl) {
     
     const analysis = await analyzePost(content, mediaUrl, rules);
     return analysis;
+}
+
+/**
+ * Fetches policy documents from Google Drive for detailed labeling reasons.
+ * @returns {Promise<object>} Object with document names as keys and content as values.
+ */
+async function fetchPolicyDocuments() {
+    try {
+        const rules = await fetchAllRules();
+        if (!rules || rules.trim().length === 0) {
+            console.log('[📋 POLICY] No policy documents available');
+            return {};
+        }
+
+        // Parse the rules content to extract individual documents
+        const documents = {};
+        const policyBlocks = rules.split('<policy_document name="');
+        
+        for (let i = 1; i < policyBlocks.length; i++) {
+            const block = policyBlocks[i];
+            const nameEnd = block.indexOf('">');
+            const contentEnd = block.indexOf('</policy_document>');
+            
+            if (nameEnd !== -1 && contentEnd !== -1) {
+                const docName = block.substring(0, nameEnd);
+                const content = block.substring(nameEnd + 2, contentEnd).trim();
+                documents[docName] = content;
+            }
+        }
+
+        console.log(`[📋 POLICY] Extracted ${Object.keys(documents).length} policy documents`);
+        return documents;
+    } catch (error) {
+        console.error('[📋 POLICY] Error fetching policy documents:', error);
+        return {};
+    }
 }
 
 /**

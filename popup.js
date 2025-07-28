@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Enhanced Final Output Update ---
-    function updateFinalOutput() {
+    async function updateFinalOutput() {
         console.log('[Xrefhub Popup] Updating final output...');
         
         const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked'))
@@ -356,11 +356,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply user corrections to selected labels
         const correctedLabels = applyUserCorrections(selectedLabels);
         
-        // Format final output in expected format
-        const formattedOutput = formatFinalOutput(correctedLabels);
+        // Format final output in expected format with policy-based reasons
+        const formattedOutput = await formatFinalOutput(correctedLabels);
         
         finalOutput.value = formattedOutput;
-        console.log('[Xrefhub Popup] Final output updated with corrections');
+        console.log('[Xrefhub Popup] Final output updated with policy-based corrections');
     }
 
     // --- Label Correction Interface ---
@@ -457,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function formatFinalOutput(correctedLabels) {
+    async function formatFinalOutput(correctedLabels) {
         if (correctedLabels.length === 0) {
             return 'No labels selected for output.';
         }
@@ -469,19 +469,129 @@ document.addEventListener('DOMContentLoaded', () => {
             year: '2-digit'
         });
 
-        // Get the resolution text
-        const resolution = aiResolution.textContent || 'No resolution available';
+        // Get detailed policy-based reasons
+        const policyReasons = await getPolicyBasedReasons(correctedLabels);
         
         // Format each label according to specification
-        const formattedLabels = correctedLabels.map(label => {
+        const formattedLabels = correctedLabels.map((label, index) => {
             // Truncate label if too long
             const truncatedLabel = label.length > 20 ? label.substring(0, 17) + '...' : label;
             
+            // Get policy-based reason or fallback to resolution
+            const reason = policyReasons[index] || aiResolution.textContent || 'No resolution available';
+            const truncatedReason = reason.length > 100 ? reason.substring(0, 97) + '...' : reason;
+            
             // Format: Label - reason (less than 100 chars) - Username - Date(mm/dd/yy)
-            return `${truncatedLabel} - ${resolution.substring(0, 100)} - ${username} - ${date}`;
+            return `${truncatedLabel} - ${truncatedReason} - ${username} - ${date}`;
         });
 
         return formattedLabels.join('\n');
+    }
+
+    async function getPolicyBasedReasons(labels) {
+        try {
+            console.log('[Xrefhub Popup] Fetching policy-based reasons for labels...');
+            
+            // Get corrections to understand the context
+            const corrections = Array.from(correctionOptions.querySelectorAll('.correction-item'))
+                .map(item => {
+                    const originalLabel = item.querySelector('select').value;
+                    const correctedLabel = item.querySelector('input[type="text"]:first-of-type').value;
+                    const reason = item.querySelector('input[type="text"]:last-of-type').value;
+                    
+                    if (originalLabel && correctedLabel && reason) {
+                        return {
+                            original: originalLabel,
+                            corrected: correctedLabel,
+                            userReason: reason
+                        };
+                    }
+                    return null;
+                })
+                .filter(correction => correction !== null);
+
+            // Fetch policy documents from Google Drive
+            const policyResponse = await chrome.runtime.sendMessage({
+                action: 'getPolicyDocuments'
+            });
+
+            if (!policyResponse || policyResponse.error) {
+                console.warn('[Xrefhub Popup] Could not fetch policy documents:', policyResponse?.error);
+                return [];
+            }
+
+            const policyDocuments = policyResponse.policies;
+            console.log('[Xrefhub Popup] Fetched policy documents:', Object.keys(policyDocuments));
+
+            // Match labels to policy sections
+            const policyReasons = labels.map(label => {
+                const correction = corrections.find(c => c.corrected === label);
+                const userReason = correction?.userReason || '';
+                
+                // Find matching policy section
+                const policyMatch = findPolicyMatch(label, policyDocuments);
+                
+                if (policyMatch) {
+                    return `${userReason} | Policy: ${policyMatch.section} - ${policyMatch.details}`;
+                } else {
+                    return userReason || 'Policy violation detected';
+                }
+            });
+
+            return policyReasons;
+
+        } catch (error) {
+            console.error('[Xrefhub Popup] Error getting policy-based reasons:', error);
+            return [];
+        }
+    }
+
+    function findPolicyMatch(label, policyDocuments) {
+        // Convert label to search terms
+        const searchTerms = label.toLowerCase().split(' ');
+        
+        for (const [docName, content] of Object.entries(policyDocuments)) {
+            const docContent = content.toLowerCase();
+            
+            // Look for policy sections that match the label
+            for (const term of searchTerms) {
+                if (docContent.includes(term)) {
+                    // Extract the relevant policy section
+                    const sectionMatch = extractPolicySection(docContent, term);
+                    if (sectionMatch) {
+                        return {
+                            document: docName,
+                            section: sectionMatch.section,
+                            details: sectionMatch.details
+                        };
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    function extractPolicySection(content, searchTerm) {
+        // Split content into sections (looking for headers, numbered lists, etc.)
+        const sections = content.split(/\n\s*\n/);
+        
+        for (const section of sections) {
+            if (section.toLowerCase().includes(searchTerm)) {
+                // Extract the first sentence or bullet point that contains the term
+                const lines = section.split('\n');
+                for (const line of lines) {
+                    if (line.toLowerCase().includes(searchTerm) && line.trim().length > 10) {
+                        return {
+                            section: line.trim().substring(0, 50) + '...',
+                            details: line.trim()
+                        };
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
 
     // --- Enhanced Error Handling ---
