@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiResolution = document.getElementById('ai-resolution');
     const deeperAnalysisResult = document.getElementById('deeper-analysis-result');
     const labelsContainer = document.getElementById('labels-container');
+    const labelCorrectionSection = document.getElementById('label-correction-section');
+    const correctionOptions = document.getElementById('correction-options');
+    const rescanButton = document.getElementById('rescan-button');
     const finalOutput = document.getElementById('final-output');
     const settingsLink = document.getElementById('settings-link');
     const openInTabButton = document.getElementById('open-in-tab-button');
@@ -30,6 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let currentTab = null;
     let scanData = null;
+    let userCorrections = [];
+    let availableLabels = [];
 
     // --- Enhanced Content Scraping ---
     async function enhancedPageScan() {
@@ -309,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[Xrefhub Popup] Populating labels:', suggestedLabels);
         
         labelsContainer.innerHTML = '';
+        availableLabels = suggestedLabels || [];
         
         if (!suggestedLabels || suggestedLabels.length === 0) {
             labelsContainer.innerHTML = '<p>No labels suggested for this content.</p>';
@@ -335,6 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add change listener for final output updates
             checkbox.addEventListener('change', updateFinalOutput);
         });
+
+        // Show correction interface
+        showCorrectionInterface();
     }
 
     // --- Enhanced Final Output Update ---
@@ -344,17 +353,135 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedLabels = Array.from(labelsContainer.querySelectorAll('input:checked'))
             .map(input => input.nextElementSibling.textContent);
         
-        const output = {
-            content: postContent.value,
-            summary: aiSummary.textContent,
-            resolution: aiResolution.textContent,
-            labels: selectedLabels,
-            timestamp: new Date().toISOString(),
-            url: currentTab?.url || 'Unknown'
-        };
+        // Apply user corrections to selected labels
+        const correctedLabels = applyUserCorrections(selectedLabels);
         
-        finalOutput.value = JSON.stringify(output, null, 2);
-        console.log('[Xrefhub Popup] Final output updated');
+        // Format final output in expected format
+        const formattedOutput = formatFinalOutput(correctedLabels);
+        
+        finalOutput.value = formattedOutput;
+        console.log('[Xrefhub Popup] Final output updated with corrections');
+    }
+
+    // --- Label Correction Interface ---
+    function showCorrectionInterface() {
+        console.log('[Xrefhub Popup] Showing correction interface...');
+        
+        labelCorrectionSection.style.display = 'block';
+        correctionOptions.innerHTML = '';
+        
+        // Add "Add Correction" button
+        const addButton = document.createElement('button');
+        addButton.className = 'add-correction-btn';
+        addButton.textContent = '+ Add Correction';
+        addButton.addEventListener('click', addCorrectionItem);
+        correctionOptions.appendChild(addButton);
+    }
+
+    function addCorrectionItem() {
+        console.log('[Xrefhub Popup] Adding correction item...');
+        
+        const correctionItem = document.createElement('div');
+        correctionItem.className = 'correction-item';
+        
+        // Create select dropdown for available labels
+        const labelSelect = document.createElement('select');
+        labelSelect.innerHTML = '<option value="">Select AI Label to Correct</option>';
+        availableLabels.forEach(label => {
+            const option = document.createElement('option');
+            option.value = label;
+            option.textContent = label;
+            labelSelect.appendChild(option);
+        });
+        
+        // Create input for corrected label
+        const correctedInput = document.createElement('input');
+        correctedInput.type = 'text';
+        correctedInput.placeholder = 'Enter corrected label';
+        correctedInput.maxLength = 50;
+        
+        // Create reason input
+        const reasonInput = document.createElement('input');
+        reasonInput.type = 'text';
+        reasonInput.placeholder = 'Reason (max 100 chars)';
+        reasonInput.maxLength = 100;
+        
+        // Create remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+            correctionItem.remove();
+            updateFinalOutput();
+        });
+        
+        // Add event listeners for real-time updates
+        [labelSelect, correctedInput, reasonInput].forEach(element => {
+            element.addEventListener('input', updateFinalOutput);
+        });
+        
+        correctionItem.appendChild(labelSelect);
+        correctionItem.appendChild(correctedInput);
+        correctionItem.appendChild(reasonInput);
+        correctionItem.appendChild(removeBtn);
+        
+        // Insert before the add button
+        const addButton = correctionOptions.querySelector('.add-correction-btn');
+        correctionOptions.insertBefore(correctionItem, addButton);
+        
+        updateFinalOutput();
+    }
+
+    function applyUserCorrections(selectedLabels) {
+        const corrections = Array.from(correctionOptions.querySelectorAll('.correction-item'))
+            .map(item => {
+                const originalLabel = item.querySelector('select').value;
+                const correctedLabel = item.querySelector('input[type="text"]:first-of-type').value;
+                const reason = item.querySelector('input[type="text"]:last-of-type').value;
+                
+                if (originalLabel && correctedLabel && reason) {
+                    return {
+                        original: originalLabel,
+                        corrected: correctedLabel,
+                        reason: reason
+                    };
+                }
+                return null;
+            })
+            .filter(correction => correction !== null);
+
+        // Apply corrections to selected labels
+        return selectedLabels.map(label => {
+            const correction = corrections.find(c => c.original === label);
+            return correction ? correction.corrected : label;
+        });
+    }
+
+    function formatFinalOutput(correctedLabels) {
+        if (correctedLabels.length === 0) {
+            return 'No labels selected for output.';
+        }
+
+        const username = 'Reviewer'; // Could be made configurable
+        const date = new Date().toLocaleDateString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+            year: '2-digit'
+        });
+
+        // Get the resolution text
+        const resolution = aiResolution.textContent || 'No resolution available';
+        
+        // Format each label according to specification
+        const formattedLabels = correctedLabels.map(label => {
+            // Truncate label if too long
+            const truncatedLabel = label.length > 20 ? label.substring(0, 17) + '...' : label;
+            
+            // Format: Label - reason (less than 100 chars) - Username - Date(mm/dd/yy)
+            return `${truncatedLabel} - ${resolution.substring(0, 100)} - ${username} - ${date}`;
+        });
+
+        return formattedLabels.join('\n');
     }
 
     // --- Enhanced Error Handling ---
@@ -371,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Enhanced Loading State ---
     function setLoadingState(isLoading, message = '') {
-        const buttons = [analyzeButton, deeperAnalysisButton, testScanButton, debugScanButton, copyButton, submitButton];
+        const buttons = [analyzeButton, deeperAnalysisButton, testScanButton, debugScanButton, rescanButton, copyButton, submitButton];
         
         buttons.forEach(button => {
             button.disabled = isLoading;
@@ -498,6 +625,59 @@ ${content || 'No content extracted'}`;
         } catch (error) {
             console.error('[Xrefhub Popup] Deeper analysis failed:', error);
             showToast(`Deeper analysis failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    });
+
+    // Rescan with corrections button
+    rescanButton.addEventListener('click', async () => {
+        console.log('[Xrefhub Popup] Rescan with corrections requested');
+        setLoadingState(true, 'Rescanning with corrections...');
+        
+        try {
+            // Get user corrections as context
+            const corrections = Array.from(correctionOptions.querySelectorAll('.correction-item'))
+                .map(item => {
+                    const originalLabel = item.querySelector('select').value;
+                    const correctedLabel = item.querySelector('input[type="text"]:first-of-type').value;
+                    const reason = item.querySelector('input[type="text"]:last-of-type').value;
+                    
+                    if (originalLabel && correctedLabel && reason) {
+                        return `${originalLabel} → ${correctedLabel} (${reason})`;
+                    }
+                    return null;
+                })
+                .filter(correction => correction !== null);
+
+            if (corrections.length === 0) {
+                showToast('No corrections to apply', 'warning');
+                return;
+            }
+
+            // Add corrections as context to the analysis
+            const correctionContext = `User Corrections:\n${corrections.join('\n')}\n\nPlease consider these corrections when analyzing the content.`;
+            
+            const response = await chrome.runtime.sendMessage({
+                action: 'analyze',
+                content: postContent.value + '\n\n' + correctionContext,
+                mediaUrl: scanData?.landingUrl || ''
+            });
+            
+            if (response && response.error) {
+                throw new Error(response.error);
+            }
+
+            if (response) {
+                handleAnalysisResponse(response);
+                showToast('Rescan completed with corrections', 'success');
+            } else {
+                throw new Error('No response from rescan');
+            }
+            
+        } catch (error) {
+            console.error('[Xrefhub Popup] Rescan failed:', error);
+            showToast(`Rescan failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
         }

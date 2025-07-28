@@ -261,6 +261,84 @@ textarea {
     flex: 1;
 }
 
+/* Label Correction Interface */
+.correction-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 12px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+}
+
+.correction-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.correction-item:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.correction-item select {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+}
+
+.correction-item input[type="text"] {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+}
+
+.correction-item .remove-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.correction-item .remove-btn:hover {
+    background: #c82333;
+}
+
+.add-correction-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.add-correction-btn:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
 /* Chat Container */
 .chat-container {
     border-top: 1px solid #e9ecef;
