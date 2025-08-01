@@ -279,91 +279,46 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
     };
     
     const handleGoogleSignIn = async () => {
-        console.log('[Xrefhub Settings] Starting enhanced Google sign-in...');
+        console.log('[Xrefhub Settings] Starting enhanced Google sign-in with OAuth fix...');
         
-        // Check if OAuth is configured
-        if (!chrome.runtime.getManifest().oauth2) {
-            updateGoogleStatus('error', 'OAuth is disabled. Please enable OAuth in manifest.json first.');
-            console.log('[Xrefhub Settings] Cannot sign in - OAuth is not configured');
-            return;
+        try {
+            // Use the new OAuth fix if available
+            if (typeof SettingsOAuthFix !== 'undefined') {
+                const oauthFix = new SettingsOAuthFix();
+                await oauthFix.handleGoogleSignIn();
+            } else {
+                // Fallback to original method if OAuth fix is not loaded
+                console.log('[Xrefhub Settings] OAuth fix not loaded, using fallback method...');
+                await handleGoogleSignInFallback();
+            }
+            
+            // Refresh connection status after sign-in attempt
+            await checkAllConnections();
+        } catch (error) {
+            console.error('[Xrefhub Settings] Sign-in failed:', error);
+            updateGoogleStatus('error', `Sign-in failed: ${error.message}`);
         }
-        
-        console.log('[Xrefhub Settings] OAuth config:', chrome.runtime.getManifest().oauth2);
+    };
+
+    // Fallback sign-in method
+    const handleGoogleSignInFallback = async () => {
+        console.log('[Xrefhub Settings] Using fallback sign-in method...');
         
         animateButton(googleSigninButton, 'loading');
         updateGoogleStatus('loading', 'Please follow the sign-in prompt...');
         
         try {
-            // Step 1: Get authentication token
-            console.log('[Xrefhub Settings] Step 1: Requesting auth token...');
-            const token = await getAuthToken(true); // Force interactive sign-in
-            
-            // Step 2: Fetch user profile
-            console.log('[Xrefhub Settings] Step 2: Fetching user profile...');
+            const token = await getAuthToken(true);
             const profile = await fetchGoogleUserProfile();
-            console.log('[Xrefhub Settings] Profile received:', profile);
             
-            // Step 3: Test basic Google API access
-            console.log('[Xrefhub Settings] Step 3: Testing basic Google API access...');
-            try {
-                // Test with a simple API call first
-                const testResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                console.log('[Xrefhub Settings] Basic API test response:', testResponse.status, testResponse.statusText);
-                
-                if (testResponse.ok) {
-                    console.log('[Xrefhub Settings] Basic API access confirmed');
-                    
-                    // Now test Drive access
-                    console.log('[Xrefhub Settings] Step 4: Testing Drive access...');
-                    try {
-                        await testDriveAccess();
-                        console.log('[Xrefhub Settings] Drive access confirmed');
-                    } catch (driveError) {
-                        console.warn('[Xrefhub Settings] Drive access test failed:', driveError.message);
-                    }
-                } else {
-                    const errorText = await testResponse.text();
-                    console.error('[Xrefhub Settings] Basic API test failed:', errorText);
-                }
-            } catch (apiError) {
-                console.warn('[Xrefhub Settings] Basic API test failed:', apiError.message);
-            }
-            
-            // Step 4: Test Sheets access (only if we have a sheet ID or want to test API access)
-            console.log('[Xrefhub Settings] Step 4: Testing Sheets access...');
-            try {
-                await testSheetsAccess();
-                console.log('[Xrefhub Settings] Sheets access confirmed');
-            } catch (sheetsError) {
-                console.warn('[Xrefhub Settings] Sheets access test failed:', sheetsError.message);
-                // Don't fail the entire sign-in process for Sheets test failure
-                // The user might not have a sheet configured yet
-            }
-            
-            // Step 5: Update UI and enable features
             updateGoogleStatus('connected', `Connected as ${profile.name}`);
             animateButton(googleSigninButton, 'success');
             
-            // Step 6: Refresh connection status
-            await checkAllConnections();
-            
-            console.log('[Xrefhub Settings] Google sign-in completed successfully');
-            
         } catch (error) {
-            console.error('[Xrefhub Settings] Enhanced sign-in failed:', error);
+            console.error('[Xrefhub Settings] Fallback sign-in failed:', error);
             
-            // Provide specific guidance for different error types
             if (error.message.includes('bad client id')) {
                 updateGoogleStatus('error', 'OAuth client ID is invalid. Please check Google Cloud Console configuration.');
-                console.error('OAuth Client ID Error: The client ID in manifest.json needs to be updated.');
-            } else if (error.message.includes('access denied')) {
-                updateGoogleStatus('error', 'Access denied. Please check OAuth consent screen and scopes.');
-            } else if (error.message.includes('network error')) {
-                updateGoogleStatus('error', 'Network error. Please check your internet connection.');
-            } else if (error.message.includes('OAuth is not configured')) {
-                updateGoogleStatus('error', 'OAuth is disabled. Please enable OAuth in manifest.json first.');
             } else {
                 updateGoogleStatus('error', `Sign-in failed: ${error.message}`);
             }

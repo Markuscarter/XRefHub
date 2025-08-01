@@ -28,9 +28,38 @@ async function getGrockToken() {
     });
 }
 
-export async function analyzePost(postContent, mediaUrl, rules) {
+export async function analyzePost(postContent, mediaUrl, rules, images = []) {
     const provider = await getAiProvider();
     const apiKey = await getApiKey(provider);
+    
+    // Build image context if images are provided
+    let imageContext = '';
+    if (images && images.length > 0) {
+        imageContext = `
+      **Images in Post:**
+      ${images.map((img, index) => `
+      Image ${index + 1}:
+      - URL: ${img.src}
+      - Alt Text: ${img.alt || 'No alt text'}
+      - Title: ${img.title || 'No title'}
+      - Dimensions: ${img.naturalWidth}x${img.naturalHeight}
+      `).join('')}
+      
+      **Image Analysis Instructions:**
+      - Analyze the visual content of each image
+      - Consider text overlays, symbols, logos, and visual elements
+      - Look for potentially inappropriate, misleading, or policy-violating visual content
+      - Combine image analysis with text content for comprehensive policy review
+      `;
+    }
+    
+    // Enhanced confidence weighting system
+    const confidenceWeights = {
+        reasoning: 0.4,    // Quality of reasoning
+        execution: 0.3,    // Execution accuracy
+        policyMatch: 0.2,  // Policy document matching
+        contentClarity: 0.1 // Content clarity
+    };
     
     const prompt = `
       You are an Expert Content Policy Analyst. Your primary goal is to conduct a nuanced analysis of a social media post, prioritizing deep policy understanding over simple label matching.
@@ -42,6 +71,7 @@ export async function analyzePost(postContent, mediaUrl, rules) {
       **Post to Analyze:**
       - **Content:** "${postContent}"
       ${mediaUrl ? `- **Media URL:** ${mediaUrl}` : ''}
+      ${imageContext}
 
       **Your Reasoning Process (Follow these steps):**
       1.  **Identify Core Issue:** First, identify the central theme or potential violation in the post (e.g., "The post appears to be promoting a financial product," "The post contains potentially hateful imagery").
@@ -381,4 +411,107 @@ function extractAndParseJson(text) {
         console.error("Failed to parse extracted JSON:", jsonString, "Original error:", e);
         throw new Error("The AI's response was not formatted correctly.");
     }
-} 
+}
+
+// --- Confidence Weighting System ---
+class ConfidenceWeightedAnalyzer {
+    constructor() {
+        this.weights = {
+            reasoning: 0.4,
+            execution: 0.3,
+            policyMatch: 0.2,
+            contentClarity: 0.1
+        };
+    }
+
+    calculateConfidence(analysis) {
+        const scores = {
+            reasoning: this.calculateReasoningConfidence(analysis),
+            execution: this.calculateExecutionConfidence(analysis),
+            policyMatch: this.calculatePolicyMatchConfidence(analysis),
+            contentClarity: this.calculateContentClarityConfidence(analysis)
+        };
+
+        const overallConfidence = Object.entries(this.weights).reduce((total, [key, weight]) => {
+            return total + (scores[key] * weight);
+        }, 0);
+
+        return {
+            overall: overallConfidence,
+            breakdown: scores,
+            conflicts: this.detectConflicts(analysis)
+        };
+    }
+
+    calculateReasoningConfidence(analysis) {
+        const reasoning = analysis.resolution || '';
+        const factors = [
+            reasoning.length > 50 ? 0.3 : 0,
+            reasoning.includes('because') ? 0.2 : 0,
+            reasoning.includes('policy') ? 0.2 : 0,
+            reasoning.includes('violation') ? 0.2 : 0,
+            reasoning.length > 100 ? 0.1 : 0
+        ];
+        return Math.min(factors.reduce((sum, factor) => sum + factor, 0), 1.0);
+    }
+
+    calculateExecutionConfidence(analysis) {
+        const labels = analysis.suggestedLabels || [];
+        const factors = [
+            labels.length > 0 ? 0.4 : 0,
+            labels.length > 1 ? 0.2 : 0,
+            analysis.policyDocument ? 0.2 : 0,
+            analysis.policyReasoning ? 0.2 : 0
+        ];
+        return Math.min(factors.reduce((sum, factor) => sum + factor, 0), 1.0);
+    }
+
+    calculatePolicyMatchConfidence(analysis) {
+        const factors = [
+            analysis.policyDocument ? 0.5 : 0,
+            analysis.policyReasoning ? 0.3 : 0,
+            analysis.policyDocument && analysis.policyDocument.length > 10 ? 0.2 : 0
+        ];
+        return Math.min(factors.reduce((sum, factor) => sum + factor, 0), 1.0);
+    }
+
+    calculateContentClarityConfidence(analysis) {
+        const summary = analysis.summary || '';
+        const factors = [
+            summary.length > 20 ? 0.4 : 0,
+            summary.length > 50 ? 0.3 : 0,
+            summary.includes('intent') ? 0.2 : 0,
+            summary.length > 100 ? 0.1 : 0
+        ];
+        return Math.min(factors.reduce((sum, factor) => sum + factor, 0), 1.0);
+    }
+
+    detectConflicts(analysis) {
+        const conflicts = [];
+        
+        // Check for reasoning vs execution conflicts
+        const reasoning = analysis.resolution || '';
+        const labels = analysis.suggestedLabels || [];
+        
+        if (reasoning.includes('no violation') && labels.length > 0) {
+            conflicts.push({
+                type: 'reasoning_execution_mismatch',
+                description: 'Reasoning suggests no violation but labels were suggested',
+                severity: 'medium'
+            });
+        }
+        
+        if (reasoning.includes('violation') && labels.length === 0) {
+            conflicts.push({
+                type: 'reasoning_execution_mismatch',
+                description: 'Reasoning suggests violation but no labels were suggested',
+                severity: 'high'
+            });
+        }
+        
+        return conflicts;
+    }
+}
+
+// Export confidence analyzer
+window.ConfidenceWeightedAnalyzer = ConfidenceWeightedAnalyzer; 

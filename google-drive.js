@@ -30,6 +30,72 @@ async function getRuleFileContent(fileId) {
 }
 
 /**
+ * Fetches images from Google Drive for analysis.
+ * @param {string} folderId Optional folder ID, defaults to configured folder
+ * @returns {Promise<Array>} Array of image objects with metadata
+ */
+export async function fetchImagesFromDrive(folderId = null) {
+  try {
+    const settings = await chrome.storage.local.get(['settings']);
+    const targetFolderId = folderId || settings?.settings?.googleFolderId;
+    
+    if (!targetFolderId) {
+      console.log('No Google Drive folder ID configured for image fetch.');
+      return [];
+    }
+
+    console.log(`[GoogleDrive] Fetching images from folder: ${targetFolderId}`);
+
+    const token = await getAuthToken();
+    
+    // Fetch image files from the folder
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and (mimeType contains 'image/') and trashed=false&fields=files(id,name,mimeType,size,createdTime,webContentLink)`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google Drive API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.files || data.files.length === 0) {
+      console.log(`No image files found in folder: ${targetFolderId}`);
+      return [];
+    }
+
+    console.log(`[GoogleDrive] Found ${data.files.length} image files`);
+
+    const images = [];
+    for (const file of data.files) {
+      try {
+        // Get image metadata
+        const imageInfo = {
+          id: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          size: file.size,
+          createdTime: file.createdTime,
+          webContentLink: file.webContentLink,
+          // Add direct download link for analysis
+          downloadUrl: `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`
+        };
+        
+        images.push(imageInfo);
+        console.log(`[GoogleDrive] Added image: ${file.name} (${file.mimeType})`);
+      } catch (error) {
+        console.error(`Error processing image ${file.name}:`, error);
+      }
+    }
+    
+    console.log(`[GoogleDrive] Successfully fetched ${images.length} images`);
+    return images;
+  } catch (error) {
+    console.error('Error fetching images from Google Drive:', error);
+    return [];
+  }
+}
+
+/**
  * Fetches all rule documents from the configured Google Drive folder.
  * @returns {Promise<string>} Combined content of all rule documents.
  */

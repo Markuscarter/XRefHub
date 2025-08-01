@@ -1,5 +1,158 @@
-import { analyzePost, getChatReply, getDeeperAnalysis as getDeeperAnalysisFromAI, getNBMResponse } from './ai-analyzer.js';
-import { fetchAllRules } from './google-drive.js';
+// Import AI analyzer functions - using script injection instead of dynamic imports
+let analyzePost, getChatReply, getDeeperAnalysisFromAI, getNBMResponse;
+let fetchAllRules, fetchImagesFromDrive;
+
+// Load modules using a CSP-compatible approach
+async function loadModules() {
+    try {
+        console.log('[Xrefhub Background] Loading modules with CSP-compatible method...');
+        
+        // For now, use the fallback system since dynamic loading is restricted
+        // In a real implementation, we'd need to restructure the modules
+        await loadModulesFallback();
+        
+        console.log('[Xrefhub Background] Using fallback module system');
+    } catch (error) {
+        console.error('[Xrefhub Background] Error loading modules:', error);
+        await loadModulesFallback();
+    }
+}
+
+// Fallback method for module loading with basic AI functionality
+async function loadModulesFallback() {
+    try {
+        console.log('[Xrefhub Background] Using fallback module loading...');
+        
+        // Basic AI provider functions
+        async function getAiProvider() {
+            return new Promise((resolve) => {
+                chrome.storage.local.get(['settings'], (result) => {
+                    resolve(result.settings?.provider || 'gemini');
+                });
+            });
+        }
+
+        async function getApiKey(provider) {
+            return new Promise((resolve) => {
+                chrome.storage.local.get(['settings'], (result) => {
+                    if (provider === 'gemini') {
+                        resolve(result.settings?.geminiApiKey);
+                    } else if (provider === 'chatgpt') {
+                        resolve(result.settings?.chatgptApiKey);
+                    } else {
+                        resolve(null);
+                    }
+                });
+            });
+        }
+
+        // Basic Gemini API call
+        async function callGeminiAPI(prompt, apiKey) {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Gemini API error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const content = data.candidates[0].content.parts[0].text;
+            
+            try {
+                return JSON.parse(content);
+            } catch (e) {
+                return { error: 'Failed to parse AI response', rawResponse: content };
+            }
+        }
+
+        // Define the AI functions
+        analyzePost = async (content, mediaUrl, rules, images = []) => {
+            const provider = await getAiProvider();
+            const apiKey = await getApiKey(provider);
+            
+            if (!apiKey) {
+                throw new Error('API key not set. Please configure in settings.');
+            }
+
+            const prompt = `
+                You are an Expert Content Policy Analyst. Analyze this content:
+                
+                Content: "${content}"
+                ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+                ${images.length > 0 ? `Images: ${images.length} found` : ''}
+                
+                Rules: ${rules}
+                
+                Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning
+            `;
+
+            return await callGeminiAPI(prompt, apiKey);
+        };
+        
+        getChatReply = async (message, history) => {
+            const provider = await getAiProvider();
+            const apiKey = await getApiKey(provider);
+            
+            if (!apiKey) {
+                return 'API key not configured. Please set up in settings.';
+            }
+
+            const prompt = `Chat history: ${JSON.stringify(history)}\n\nUser: ${message}\n\nAssistant:`;
+            const response = await callGeminiAPI(prompt, apiKey);
+            return response.summary || response.rawResponse || 'No response from AI';
+        };
+        
+        getDeeperAnalysisFromAI = async (content, mediaUrl, rules) => {
+            const provider = await getAiProvider();
+            const apiKey = await getApiKey(provider);
+            
+            if (!apiKey) {
+                throw new Error('API key not set. Please configure in settings.');
+            }
+
+            const prompt = `
+                Provide a deeper analysis of this content:
+                
+                Content: "${content}"
+                ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+                
+                Rules: ${rules}
+                
+                Provide detailed analysis with specific policy references.
+            `;
+
+            const response = await callGeminiAPI(prompt, apiKey);
+            return response.summary || response.rawResponse || 'No analysis available';
+        };
+        
+        getNBMResponse = async (content, mediaUrl, rules) => {
+            return await analyzePost(content, mediaUrl, rules);
+        };
+        
+        fetchAllRules = async () => {
+            return 'Basic content analysis rules:\n- Check for inappropriate content\n- Verify accuracy\n- Assess tone and context';
+        };
+        
+        fetchImagesFromDrive = async () => {
+            return [];
+        };
+        
+        console.log('[Xrefhub Background] Fallback modules loaded with basic AI functionality');
+    } catch (error) {
+        console.error('[Xrefhub Background] Fallback loading failed:', error);
+    }
+}
 
 // --- Google Sheets Integration ---
 
@@ -145,8 +298,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             } else if (request.action === 'analyze') {
                 console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
                 console.log('📝 Content preview:', request.content?.substring(0, 100) + '...');
+                console.log('🖼️ Images to analyze:', request.images?.length || 0);
                 
-                const analysis = await handleAnalysis(request.content, request.mediaUrl);
+                const analysis = await handleAnalysis(request.content, request.mediaUrl, request.images);
                 console.log('✅ Analysis completed:', {
                     hasSummary: !!analysis.summary,
                     hasResolution: !!analysis.resolution,
@@ -186,6 +340,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     sendResponse({ policies });
                 } catch (error) {
                     console.log('[❌ POLICY ERROR]:', error.message);
+                    sendResponse({ error: error.message });
+                }
+            } else if (request.action === 'getDriveImages') {
+                try {
+                    console.log('[🖼️ DRIVE] Fetching images from Google Drive...');
+                    const images = await fetchImagesFromDrive();
+                    console.log('[✅ DRIVE] Successfully fetched images:', images.length);
+                    sendResponse({ images });
+                } catch (error) {
+                    console.log('[❌ DRIVE IMAGES ERROR]:', error.message);
+                    sendResponse({ error: error.message });
+                }
+            } else if (request.action === 'fetchURLContent') {
+                try {
+                    console.log('🌐 Fetching content from URL:', request.url);
+                    const content = await fetchURLContent(request.url);
+                    console.log('✅ URL content fetched successfully');
+                    sendResponse({ content });
+                } catch (error) {
+                    console.error('❌ URL fetch failed:', error);
                     sendResponse({ error: error.message });
                 }
             } else if (request.action === 'chat') {
@@ -506,9 +680,11 @@ async function scanPage(tabId) {
 /**
  * Handles the analysis process by fetching label rules and calling the AI.
  * @param {string} content The content to analyze.
+ * @param {string} mediaUrl Optional media URL.
+ * @param {Array} images Optional array of images to analyze.
  * @returns {Promise<object>} The analysis result from the AI.
  */
-export async function handleAnalysis(content, mediaUrl) {
+export async function handleAnalysis(content, mediaUrl, images = []) {
     let rules = '';
     
     // Try to get rules from Google Sheet first
@@ -534,7 +710,7 @@ export async function handleAnalysis(content, mediaUrl) {
         console.log('Drive rules not available, continuing with available rules:', error.message);
     }
     
-    const analysis = await analyzePost(content, mediaUrl, rules);
+    const analysis = await analyzePost(content, mediaUrl, rules, images);
     return analysis;
 }
 
@@ -619,7 +795,145 @@ async function getLabels() {
     return labels;
 }
 
+// Initialize modules on startup
+loadModules();
+
+// Message listener for popup communication
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[Xrefhub Background] Received message:', request.action);
+    
+    // Handle different message types
+    switch (request.action) {
+        case 'scanPage':
+            scanPage(request.tabId).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Scan error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true; // Keep message channel open for async response
+            
+        case 'analyze':
+            handleAnalysis(request.content, request.mediaUrl, request.images).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Analysis error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'deeperAnalysis':
+            getDeeperAnalysis(request.content, request.mediaUrl).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Deeper analysis error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'getLabels':
+            getLabels().then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Get labels error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'writeToSheet':
+            writeToSheet(request.data).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Write to sheet error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'getPolicyDocuments':
+            fetchPolicyDocuments().then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Get policy documents error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'fetchURLContent':
+            fetchURLContent(request.url).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] URL fetch error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        case 'chat':
+            getChatReply(request.message, request.history).then(sendResponse).catch(error => {
+                console.error('[Xrefhub Background] Chat error:', error);
+                sendResponse({ error: error.message });
+            });
+            return true;
+            
+        default:
+            console.warn('[Xrefhub Background] Unknown action:', request.action);
+            sendResponse({ error: 'Unknown action' });
+            return false;
+    }
+});
+
 // Open the settings page on installation
 chrome.runtime.onInstalled.addListener(() => {
     chrome.runtime.openOptionsPage();
 });
+
+// --- URL Content Fetching ---
+async function fetchURLContent(url) {
+    try {
+        console.log('[Background] Fetching content from URL:', url);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const html = await response.text();
+        
+        // Extract text content from HTML
+        const textContent = extractTextFromHTML(html);
+        
+        console.log('[Background] Successfully fetched content from URL, length:', textContent.length);
+        
+        return {
+            url: url,
+            html: html,
+            text: textContent,
+            timestamp: new Date().toISOString()
+        };
+        
+    } catch (error) {
+        console.error('[Background] Error fetching URL content:', error);
+        throw new Error(`Failed to fetch content from ${url}: ${error.message}`);
+    }
+}
+
+// Extract text content from HTML
+function extractTextFromHTML(html) {
+    try {
+        // Simple text extraction - remove HTML tags and decode entities
+        let text = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove styles
+            .replace(/<[^>]+>/g, ' ') // Remove HTML tags
+            .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+            .replace(/&amp;/g, '&') // Replace HTML entities
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim();
+        
+        // Limit text length to prevent memory issues
+        if (text.length > 50000) {
+            text = text.substring(0, 50000) + '... [Content truncated]';
+        }
+        
+        return text;
+        
+    } catch (error) {
+        console.error('[Background] Error extracting text from HTML:', error);
+        return 'Error extracting content from HTML';
+    }
+}

@@ -16,10 +16,22 @@
         </header>
         <main>
             <div class="card">
-                <h2 class="card-header">Post Content</h2>
-                <textarea id="post-content" rows="4" placeholder="Scanning page for content..."></textarea>
-                <button id="analyze-button" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Analyze Page</button>
-                <button id="test-scan-button" class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%;">Test Scan</button>
+                <h2 class="card-header">Review Mode</h2>
+                <div id="review-mode-container" class="review-mode-container">
+                    <!-- Compact review mode selector will be inserted here -->
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-header">Content Analysis</h2>
+                <div class="input-group">
+                    <input type="url" id="url-input" placeholder="Enter URL to analyze..." class="url-input">
+                    <button id="analyze-url-button" class="btn btn-secondary">Analyze URL</button>
+                </div>
+                <div class="content-divider">OR</div>
+                <textarea id="post-content" rows="4" placeholder="Enter content to analyze or scan current page..."></textarea>
+                <button id="analyze-button" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Analyze Content</button>
+                <button id="test-scan-button" class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%;">Scan Current Page</button>
                 <button id="debug-scan-button" class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%;">Debug Scan</button>
             </div>
 
@@ -51,6 +63,8 @@
                 </div>
             </div>
 
+
+
             <div class="card">
                 <h2 class="card-header">Final Output</h2>
                 <textarea id="final-output" rows="3" readonly placeholder="Final output will appear here after submission is configured."></textarea>
@@ -73,6 +87,8 @@
         </div>
     </div>
 
+    <script src="review-mode-selector.js"></script>
+    <script src="url-analyzer.js"></script>
     <script src="popup.js"></script>
 </body>
 </html> 

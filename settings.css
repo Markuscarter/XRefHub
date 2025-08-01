@@ -261,4 +261,47 @@ header {
     font-size: 0.9rem;
     color: #6b7280;
     font-weight: 400;
+}
+
+/* OAuth Guidance Styles */
+.oauth-guidance-container {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.oauth-guidance h4 {
+    margin: 0 0 0.5rem 0;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.oauth-guidance ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.oauth-guidance li {
+    margin: 0.25rem 0;
+    color: #6c757d;
+}
+
+.oauth-guidance code {
+    background-color: #e9ecef;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.oauth-guidance a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.oauth-guidance a:hover {
+    text-decoration: underline;
 } 

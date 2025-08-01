@@ -3,8 +3,10 @@
  * @version 2.0.0
  */
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Xrefhub Popup] Initializing enhanced popup...');
+// Check if we're in a popup context
+if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[Xrefhub Popup] Initializing enhanced popup...');
     
     // --- Element Selectors ---
     const analyzeButton = document.getElementById('analyze-button');
@@ -54,14 +56,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             console.log('[Xrefhub Popup] Scanning tab:', currentTab.id, 'URL:', currentTab.url);
 
-            // Perform the scan with timeout protection
+            // Perform the scan with extended timeout protection
             const scanResponse = await Promise.race([
                 chrome.runtime.sendMessage({ 
                     action: 'scanPage', 
                     tabId: currentTab.id 
                 }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Scan timeout after 15 seconds')), 15000)
+                    setTimeout(() => reject(new Error('Scan timeout after 30 seconds')), 30000)
                 )
             ]);
 
@@ -69,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Validate scan response
             if (!scanResponse) {
-                throw new Error('No response from content scanner');
+                throw new Error('No response from content scanner - service worker may not be ready');
             }
 
             if (scanResponse.error) {
@@ -241,14 +243,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        setLoadingState(true, 'Analyzing content with AI...');
+        // Get current review mode
+        const reviewMode = window.reviewModeSelector ? window.reviewModeSelector.getCurrentMode() : 'adReview';
+        const modeConfig = window.reviewModeSelector ? window.reviewModeSelector.getModeConfig() : null;
+        
+        console.log(`[Xrefhub Popup] Using review mode: ${reviewMode}`);
+        
+        setLoadingState(true, `Analyzing content (${modeConfig ? modeConfig.name : 'Standard'} mode)...`);
         
         try {
             const analysisResponse = await Promise.race([
                 chrome.runtime.sendMessage({
                     action: 'analyze',
                     content: postContent.value,
-                    mediaUrl: scanData?.landingUrl || ''
+                    mediaUrl: scanData?.landingUrl || '',
+                    images: scanData?.images || [],
+                    reviewMode: reviewMode,
+                    modePrompt: modeConfig ? modeConfig.aiPrompt : null
                 }),
                 new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
@@ -274,6 +285,72 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(`Analysis failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
+        }
+    }
+
+    // --- URL Analysis Trigger ---
+    async function triggerURLAnalysis() {
+        console.log('[Xrefhub Popup] Triggering URL analysis...');
+        
+        const urlInput = document.getElementById('url-input');
+        const url = urlInput.value.trim();
+        
+        if (!url) {
+            showToast('Please enter a URL to analyze', 'warning');
+            return;
+        }
+
+        // Validate URL format
+        if (!isValidURL(url)) {
+            showToast('Please enter a valid URL', 'error');
+            return;
+        }
+
+        // Get current review mode
+        const reviewMode = window.reviewModeSelector ? window.reviewModeSelector.getCurrentMode() : 'adReview';
+        const modeConfig = window.reviewModeSelector ? window.reviewModeSelector.getModeConfig() : null;
+        
+        console.log(`[Xrefhub Popup] Analyzing URL with mode: ${reviewMode}`);
+        
+        setLoadingState(true, `Analyzing URL (${modeConfig ? modeConfig.name : 'Standard'} mode)...`);
+        
+        try {
+            // Initialize URL analyzer if not already done
+            if (!window.urlAnalyzer) {
+                window.urlAnalyzer = new URLAnalyzer();
+            }
+            
+            const analysisResponse = await window.urlAnalyzer.analyzeURL(url, reviewMode);
+            
+            console.log('[Xrefhub Popup] URL analysis response:', analysisResponse);
+
+            if (analysisResponse && analysisResponse.error) {
+                throw new Error(analysisResponse.error);
+            }
+
+            if (analysisResponse) {
+                handleAnalysisResponse(analysisResponse);
+                showToast('URL analysis completed successfully', 'success');
+            } else {
+                throw new Error('No response from URL analysis');
+            }
+
+        } catch (error) {
+            console.error('[Xrefhub Popup] URL analysis failed:', error);
+            handleError(error, 'URL analysis failed');
+            showToast(`URL analysis failed: ${error.message}`, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    // URL validation helper
+    function isValidURL(url) {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
         }
     }
 
@@ -359,8 +436,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Format final output in expected format with policy-based reasons
         const formattedOutput = await formatFinalOutput(correctedLabels);
         
-        finalOutput.value = formattedOutput;
-        console.log('[Xrefhub Popup] Final output updated with policy-based corrections');
+        // Handle new structured output format
+        if (typeof formattedOutput === 'object' && formattedOutput.text) {
+            finalOutput.value = formattedOutput.text;
+            
+            // Store structured data for copy/paste functionality
+            window.currentStructuredOutput = formattedOutput.structured;
+            window.currentCopyText = formattedOutput.copyText;
+            
+            console.log('[Xrefhub Popup] Final output updated with structured format');
+        } else {
+            // Fallback to string output
+            finalOutput.value = formattedOutput;
+            console.log('[Xrefhub Popup] Final output updated with fallback format');
+        }
     }
 
     // --- Label Correction Interface ---
@@ -462,30 +551,124 @@ document.addEventListener('DOMContentLoaded', () => {
             return 'No labels selected for output.';
         }
 
-        const username = 'Reviewer'; // Could be made configurable
+        // Get username from settings or use default
+        let username = 'Reviewer';
+        try {
+            const settings = await chrome.storage.local.get(['settings']);
+            if (settings.settings?.username) {
+                username = settings.settings.username;
+            }
+        } catch (error) {
+            console.warn('[Xrefhub Popup] Could not get username from settings:', error);
+        }
+
         const date = new Date().toLocaleDateString('en-US', {
             month: '2-digit',
             day: '2-digit',
             year: '2-digit'
         });
 
+        const time = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
         // Get detailed policy-based reasons
         const policyReasons = await getPolicyBasedReasons(correctedLabels);
         
-        // Format each label according to specification
+        // Enhanced formatting to prevent [object Object] issues
         const formattedLabels = correctedLabels.map((label, index) => {
-            // Truncate label if too long
-            const truncatedLabel = label.length > 20 ? label.substring(0, 17) + '...' : label;
+            // Ensure label is a string and handle complex objects
+            let safeLabel = '';
+            if (typeof label === 'string') {
+                safeLabel = label;
+            } else if (typeof label === 'object' && label !== null) {
+                // Handle object labels - extract meaningful text
+                if (label.text) {
+                    safeLabel = label.text;
+                } else if (label.label) {
+                    safeLabel = label.label;
+                } else if (label.name) {
+                    safeLabel = label.name;
+                } else {
+                    safeLabel = JSON.stringify(label);
+                }
+            } else {
+                safeLabel = String(label);
+            }
+            
+            // Clean and truncate label
+            safeLabel = safeLabel.replace(/[^\w\s\-_]/g, '').trim();
+            const truncatedLabel = safeLabel.length > 30 ? safeLabel.substring(0, 27) + '...' : safeLabel;
             
             // Get policy-based reason or fallback to resolution
-            const reason = policyReasons[index] || aiResolution.textContent || 'No resolution available';
-            const truncatedReason = reason.length > 100 ? reason.substring(0, 97) + '...' : reason;
+            let reason = policyReasons[index] || (aiResolution?.textContent || 'No resolution available');
             
-            // Format: Label - reason (less than 100 chars) - Username - Date(mm/dd/yy)
-            return `${truncatedLabel} - ${truncatedReason} - ${username} - ${date}`;
+            // Ensure reason is a string
+            if (typeof reason === 'object' && reason !== null) {
+                if (reason.text) {
+                    reason = reason.text;
+                } else if (reason.reason) {
+                    reason = reason.reason;
+                } else {
+                    reason = JSON.stringify(reason);
+                }
+            } else {
+                reason = String(reason);
+            }
+            
+            // Clean and truncate reason
+            reason = reason.replace(/[^\w\s\-_.,!?]/g, '').trim();
+            const truncatedReason = reason.length > 150 ? reason.substring(0, 147) + '...' : reason;
+            
+            // Format: Label - Reason - Username - Date/Time
+            return `${truncatedLabel} - ${truncatedReason} - ${username} - ${date} ${time}`;
         });
 
-        return formattedLabels.join('\n');
+        // Create structured output for copy/paste compatibility
+        const structuredOutput = {
+            timestamp: new Date().toISOString(),
+            username: username,
+            labels: formattedLabels,
+            totalLabels: correctedLabels.length,
+            format: 'copy-paste-compatible'
+        };
+
+        // Return both formatted text and structured data
+        return {
+            text: formattedLabels.join('\n'),
+            structured: structuredOutput,
+            copyText: formattedLabels.join('\n')
+        };
+    }
+
+    // --- Enhanced Object Serialization ---
+    function safeStringify(obj, indent = 2) {
+        try {
+            if (typeof obj === 'object' && obj !== null) {
+                return JSON.stringify(obj, null, indent);
+            }
+            return String(obj);
+        } catch (error) {
+            console.error('[Xrefhub Popup] Stringify error:', error);
+            return String(obj);
+        }
+    }
+
+    // --- Structured Username Logging ---
+    function logStructuredData(data) {
+        const structured = {
+            timestamp: new Date().toISOString(),
+            username: data.username || 'unknown',
+            content: data.content || '',
+            metadata: {
+                source: data.source || 'manual',
+                confidence: data.confidence || 0,
+                labels: data.labels || []
+            }
+        };
+        return JSON.stringify(structured, null, 2);
     }
 
     async function getPolicyBasedReasons(labels) {
@@ -713,6 +896,12 @@ ${content || 'No content extracted'}`;
     // Analyze button
     analyzeButton.addEventListener('click', triggerAnalysis);
 
+    // URL analyze button
+    const analyzeUrlButton = document.getElementById('analyze-url-button');
+    if (analyzeUrlButton) {
+        analyzeUrlButton.addEventListener('click', triggerURLAnalysis);
+    }
+
     // Deeper analysis button
     deeperAnalysisButton.addEventListener('click', async () => {
         console.log('[Xrefhub Popup] Deeper analysis requested');
@@ -882,4 +1071,77 @@ ${content || 'No content extracted'}`;
     // --- Initialize ---
     console.log('[Xrefhub Popup] Starting initialization...');
     initialize();
-}); 
+    
+    // Initialize review mode selector
+    initializeReviewModeSelector();
+    });
+}
+
+// --- Connection Status Management ---
+async function initializeConnectionStatus() {
+    try {
+        console.log('[Xrefhub Popup] Initializing connection status...');
+        
+        // Create connection status manager
+        const connectionManager = new ConnectionStatusManager();
+        
+        // Check all connections
+        const status = await connectionManager.checkAllConnections();
+        
+        // Display status in popup
+        connectionManager.displayStatusInPopup();
+        
+        console.log('[Xrefhub Popup] Connection status checked:', status);
+        
+        // Store manager for later use
+        window.connectionManager = connectionManager;
+        
+    } catch (error) {
+        console.error('[Xrefhub Popup] Connection status error:', error);
+        
+        // Show error in status container
+        const statusContainer = document.getElementById('connection-status');
+        if (statusContainer) {
+            statusContainer.innerHTML = `
+                <div class="connection-status">
+                    <h3>Connection Status</h3>
+                    <div class="status-item error">
+                        <span class="service-name">Status Check</span>
+                        <span class="status-indicator">❌</span>
+                        <span class="status-message">Error checking connections: ${error.message}</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+// --- Review Mode Selector Management ---
+function initializeReviewModeSelector() {
+    try {
+        console.log('[Xrefhub Popup] Initializing review mode selector...');
+        
+        // Create review mode selector
+        const reviewModeSelector = new ReviewModeSelector();
+        
+        // Insert the selector into the container
+        const container = document.getElementById('review-mode-container');
+        if (container) {
+            const selectorElement = reviewModeSelector.createModeSelector();
+            container.appendChild(selectorElement);
+            
+            // Initialize the selector
+            reviewModeSelector.init();
+            
+            // Store for later use
+            window.reviewModeSelector = reviewModeSelector;
+            
+            console.log('[Xrefhub Popup] Review mode selector initialized');
+        } else {
+            console.error('[Xrefhub Popup] Review mode container not found');
+        }
+        
+    } catch (error) {
+        console.error('[Xrefhub Popup] Review mode selector error:', error);
+    }
+} 

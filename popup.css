@@ -557,4 +557,179 @@ input:focus-visible {
         width: 100% !important;
         height: auto !important;
     }
+}
+
+/* Connection status styles */
+.connection-status {
+    font-size: 0.9rem;
+}
+
+.connection-status h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.status-item.success {
+    background-color: var(--success-bg, #f0f9ff);
+    border-left: 3px solid var(--success-color, #10b981);
+}
+
+.status-item.warning {
+    background-color: var(--warning-bg, #fffbeb);
+    border-left: 3px solid var(--warning-color, #f59e0b);
+}
+
+.status-item.error {
+    background-color: var(--error-bg, #fef2f2);
+    border-left: 3px solid var(--error-color, #ef4444);
+}
+
+.service-name {
+    font-weight: 600;
+    min-width: 100px;
+    margin-right: 0.5rem;
+}
+
+.status-indicator {
+    margin-right: 0.5rem;
+    font-size: 1rem;
+}
+
+.status-message {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+/* Compact Review Mode Selector Styles */
+.review-mode-container {
+    padding: 0.25rem 0;
+}
+
+.review-mode-selector.compact {
+    font-size: 0.85rem;
+}
+
+.compact-mode-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.compact-review-mode-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+    text-align: center;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.compact-review-mode-button:hover {
+    border-color: var(--primary-color);
+    background: var(--primary-bg);
+}
+
+.compact-review-mode-button.active {
+    border-color: var(--primary-color);
+    background: var(--primary-bg);
+    color: white;
+}
+
+.compact-review-mode-button .mode-icon {
+    font-size: 1rem;
+}
+
+.compact-review-mode-button .mode-name {
+    font-weight: 500;
+    font-size: 0.75rem;
+}
+
+/* URL Analysis Styles */
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.url-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.content-divider {
+    text-align: center;
+    margin: 1rem 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    position: relative;
+}
+
+.content-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border-color);
+    z-index: -1;
+}
+
+.content-divider::after {
+    content: 'OR';
+    background: white;
+    padding: 0 1rem;
+}
+
+/* Mode-specific result formatting */
+.execution-results {
+    border-left: 3px solid #f59e0b;
+    padding-left: 1rem;
+    margin: 1rem 0;
+}
+
+.policy-results {
+    border-left: 3px solid #10b981;
+    padding-left: 1rem;
+    margin: 1rem 0;
+}
+
+.risk-results {
+    border-left: 3px solid #ef4444;
+    padding-left: 1rem;
+    margin: 1rem 0;
+}
+
+.standard-results {
+    border-left: 3px solid #3b82f6;
+    padding-left: 1rem;
+    margin: 1rem 0;
 } 

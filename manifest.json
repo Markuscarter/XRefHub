@@ -36,7 +36,20 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "policy-data.json"
+                "policy-data.json",
+                "dropdown-component.js",
+                "ppp-analyzer.js",
+                "performance-optimizer.js",
+                "connection-status.js",
+                "review-mode-selector.js",
+                "enhanced-dropdown.js",
+                "enhanced-content-collector.js",
+                "confidence-weighting.js",
+                "settings-oauth-fix.js",
+                "url-analyzer.js",
+                "ai-analyzer.js",
+                "google-drive.js",
+                "google-sheets.js"
             ],
             "matches": [
                 "<all_urls>"
@@ -44,7 +57,7 @@
         }
     ],
     "oauth2": {
-        "client_id": "1035106798421-h5k288bsu649ei9nisq7bjvv60m6d907.apps.googleusercontent.com",
+        "client_id": "1035106798421-5cctc6ntqokrs0gitg10700nlps5t42g.apps.googleusercontent.com",
         "scopes": [
             "https://www.googleapis.com/auth/drive.readonly",
             "https://www.googleapis.com/auth/spreadsheets",
