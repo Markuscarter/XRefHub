@@ -732,4 +732,51 @@ input:focus-visible {
     border-left: 3px solid #3b82f6;
     padding-left: 1rem;
     margin: 1rem 0;
+}
+
+/* Industry Detection Styles */
+.industry-detection {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+
+.industry-detection h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.industry-detection p {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+.industry-detection strong {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* High risk industry detection */
+.industry-detection:has(h4:contains("🚨")) {
+    background: #fff5f5;
+    border-color: #fed7d7;
+}
+
+.industry-detection:has(h4:contains("🚨")) h4 {
+    color: #c53030;
+}
+
+/* Safe industry detection */
+.industry-detection:has(h4:contains("✅")) {
+    background: #f0fff4;
+    border-color: #9ae6b4;
+}
+
+.industry-detection:has(h4:contains("✅")) h4 {
+    color: #38a169;
 } 

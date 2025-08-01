@@ -236,7 +236,7 @@ if (typeof window !== 'undefined') {
 
     // --- Enhanced Analysis Trigger ---
     async function triggerAnalysis() {
-        console.log('[Xrefhub Popup] Triggering content analysis...');
+        console.log('[Xrefhub Popup] Triggering enhanced content analysis with industry detection...');
         
         if (!postContent.value || postContent.value.trim().length < 10) {
             showToast('Please enter content to analyze', 'warning');
@@ -249,9 +249,18 @@ if (typeof window !== 'undefined') {
         
         console.log(`[Xrefhub Popup] Using review mode: ${reviewMode}`);
         
-        setLoadingState(true, `Analyzing content (${modeConfig ? modeConfig.name : 'Standard'} mode)...`);
+        setLoadingState(true, `Analyzing content with industry detection (${modeConfig ? modeConfig.name : 'Standard'} mode)...`);
         
         try {
+            // First, detect prohibited industries
+            const industryAnalysis = detectProhibitedIndustries(postContent.value);
+            console.log('[Xrefhub Popup] Industry detection completed:', {
+                primaryIndustry: industryAnalysis.primaryIndustry,
+                confidence: industryAnalysis.confidence,
+                detectedIndustries: industryAnalysis.detectedIndustries.length
+            });
+
+            // Perform AI analysis
             const analysisResponse = await Promise.race([
                 chrome.runtime.sendMessage({
                     action: 'analyze',
@@ -266,23 +275,40 @@ if (typeof window !== 'undefined') {
                 )
             ]);
 
-            console.log('[Xrefhub Popup] Analysis response:', analysisResponse);
+            console.log('[Xrefhub Popup] AI analysis response:', analysisResponse);
 
             if (analysisResponse && analysisResponse.error) {
                 throw new Error(analysisResponse.error);
             }
 
             if (analysisResponse) {
-                handleAnalysisResponse(analysisResponse);
-                showToast('Analysis completed successfully', 'success');
+                // Combine AI analysis with industry detection
+                const enhancedResponse = {
+                    ...analysisResponse,
+                    industryDetection: industryAnalysis,
+                    combinedLabels: [...(analysisResponse.suggestedLabels || []), ...industryAnalysis.suggestedLabels],
+                    violationRisk: industryAnalysis.primaryIndustry !== "NONE" ? "HIGH" : "LOW",
+                    enforcementAction: industryAnalysis.primaryIndustry !== "NONE" ? "BOUNCE POST" : "REVIEW"
+                };
+
+                console.log('[Xrefhub Popup] Enhanced analysis completed:', {
+                    primaryIndustry: enhancedResponse.industryDetection.primaryIndustry,
+                    confidence: enhancedResponse.industryDetection.confidence,
+                    violationRisk: enhancedResponse.violationRisk,
+                    enforcementAction: enhancedResponse.enforcementAction,
+                    suggestedLabels: enhancedResponse.combinedLabels?.length || 0
+                });
+
+                handleAnalysisResponse(enhancedResponse);
+                showToast('Enhanced analysis completed successfully', 'success');
             } else {
                 throw new Error('No response from analysis');
             }
 
         } catch (error) {
-            console.error('[Xrefhub Popup] Analysis failed:', error);
-            handleError(error, 'Content analysis failed');
-            showToast(`Analysis failed: ${error.message}`, 'error');
+            console.error('[Xrefhub Popup] Enhanced analysis failed:', error);
+            handleError(error, 'Enhanced content analysis failed');
+            showToast(`Enhanced analysis failed: ${error.message}`, 'error');
         } finally {
             setLoadingState(false);
         }
@@ -356,14 +382,56 @@ if (typeof window !== 'undefined') {
 
     // --- Enhanced Analysis Response Handler ---
     function handleAnalysisResponse(response) {
-        console.log('[Xrefhub Popup] Handling analysis response...');
+        console.log('[Xrefhub Popup] Handling enhanced analysis response...');
         
         currentAnalysis = response;
 
-        // Update summary
-        if (response.summary) {
-            aiSummary.textContent = response.summary;
+        // Display industry detection results if available
+        if (response.industryDetection) {
+            const industryInfo = response.industryDetection;
+            console.log('[Xrefhub Popup] Industry detection results:', industryInfo);
+            
+            // Create industry detection display
+            let industryDisplay = '';
+            if (industryInfo.primaryIndustry !== "NONE") {
+                industryDisplay = `
+                    <div class="industry-detection">
+                        <h4>🚨 Industry Detection Results</h4>
+                        <p><strong>Primary Industry:</strong> ${industryInfo.primaryIndustry}</p>
+                        <p><strong>Confidence:</strong> ${(industryInfo.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>Severity:</strong> ${industryInfo.severity}</p>
+                        <p><strong>Violation Risk:</strong> ${response.violationRisk}</p>
+                        <p><strong>Enforcement Action:</strong> ${response.enforcementAction}</p>
+                        ${industryInfo.detectedIndustries.length > 1 ? 
+                            `<p><strong>Other Detected:</strong> ${industryInfo.detectedIndustries.slice(1).map(d => d.industry).join(', ')}</p>` : 
+                            ''
+                        }
+                    </div>
+                `;
+            } else {
+                industryDisplay = `
+                    <div class="industry-detection">
+                        <h4>✅ Industry Detection Results</h4>
+                        <p><strong>Status:</strong> No prohibited industries detected</p>
+                        <p><strong>Violation Risk:</strong> ${response.violationRisk}</p>
+                        <p><strong>Enforcement Action:</strong> ${response.enforcementAction}</p>
+                    </div>
+                `;
+            }
+            
+            // Add industry detection to summary
+            if (response.summary) {
+                aiSummary.innerHTML = industryDisplay + '<hr>' + response.summary;
+            } else {
+                aiSummary.innerHTML = industryDisplay;
+            }
             aiSummary.style.display = 'block';
+        } else {
+            // Update summary (fallback)
+            if (response.summary) {
+                aiSummary.textContent = response.summary;
+                aiSummary.style.display = 'block';
+            }
         }
 
         // Update resolution
@@ -372,9 +440,10 @@ if (typeof window !== 'undefined') {
             aiResolution.style.display = 'block';
         }
 
-        // Populate labels
-        if (response.suggestedLabels && Array.isArray(response.suggestedLabels)) {
-            populateLabels(response.suggestedLabels);
+        // Populate labels (use combined labels if available)
+        const labelsToUse = response.combinedLabels || response.suggestedLabels;
+        if (labelsToUse && Array.isArray(labelsToUse)) {
+            populateLabels(labelsToUse);
         }
 
         // Update final output
@@ -383,7 +452,7 @@ if (typeof window !== 'undefined') {
         // Enable deeper analysis
         deeperAnalysisButton.disabled = false;
         
-        console.log('[Xrefhub Popup] Analysis response handled successfully');
+        console.log('[Xrefhub Popup] Enhanced analysis response handled successfully');
     }
 
     // --- Enhanced Label Population ---
@@ -775,6 +844,203 @@ if (typeof window !== 'undefined') {
         }
         
         return null;
+    }
+
+    // --- Enhanced Industry Detection System ---
+    
+    // All prohibited industries from X/Twitter enforcement workflow
+    const PROHIBITED_INDUSTRIES = {
+        Adult: {
+            keywords: ["adult", "sexual", "porn", "xxx", "adult content", "mature", "explicit"],
+            labels: [
+                "Adult Content - No Disclosure",
+                "Adult Services - Policy Violation",
+                "Adult Merchandise - Missing #Ad",
+                "Adult Content - Commercial Content",
+                "Adult Services - Unlabeled"
+            ]
+        },
+        Alcohol: {
+            keywords: ["alcohol", "beer", "wine", "liquor", "drink", "beverage", "cocktail", "spirits"],
+            labels: [
+                "Alcohol - No Disclosure",
+                "Alcoholic Beverages - Policy Violation",
+                "Alcohol Promotion - Missing #Ad",
+                "Alcohol Content - Commercial Content",
+                "Alcoholic Products - Unlabeled"
+            ]
+        },
+        Contraceptives: {
+            keywords: ["contraceptive", "birth control", "condom", "protection", "family planning"],
+            labels: [
+                "Contraceptives - No Disclosure",
+                "Birth Control - Policy Violation",
+                "Contraceptive Products - Missing #Ad",
+                "Family Planning - Commercial Content",
+                "Contraceptives - Unlabeled"
+            ]
+        },
+        Dating: {
+            keywords: ["dating", "marriage", "relationship", "match", "love", "romance", "singles"],
+            labels: [
+                "Dating Services - No Disclosure",
+                "Dating & Marriage - Policy Violation",
+                "Dating Platform - Missing #Ad",
+                "Dating Services - Commercial Content",
+                "Dating & Marriage Services - Unlabeled"
+            ]
+        },
+        Drugs: {
+            keywords: ["drug", "marijuana", "cannabis", "weed", "substance", "medication", "pharmaceutical"],
+            labels: [
+                "Drugs - No Disclosure",
+                "Drug Products - Policy Violation",
+                "Drug Promotion - Missing #Ad",
+                "Drug Content - Commercial Content",
+                "Drug Products - Unlabeled"
+            ]
+        },
+        Financial: {
+            keywords: ["crypto", "cryptocurrency", "bitcoin", "investment", "trading", "finance", "money", "earn", "profit", "returns", "financial"],
+            labels: [
+                "Financial Services - No Disclosure",
+                "Investment Platform - Missing #Ad",
+                "Crypto Trading - Policy Violation",
+                "Money Making - Commercial Content",
+                "Financial Products - Unlabeled"
+            ]
+        },
+        Gambling: {
+            keywords: ["gambling", "casino", "lottery", "bet", "wager", "poker", "blackjack", "roulette", "slot", "sports betting", "online casino", "gaming", "jackpot", "win", "winning", "odds", "betting", "payout", "bonus", "free spins", "deposit", "withdrawal", "real money", "cash out"],
+            labels: [
+                "Gambling - No Disclosure",
+                "Casino Promotion - Policy Violation",
+                "Sports Betting - Missing #Ad",
+                "Online Gaming - Commercial Content",
+                "Gambling Content - Policy Violation"
+            ]
+        },
+        Health: {
+            keywords: ["supplement", "vitamin", "diet", "weight loss", "fitness", "health", "wellness", "nutrition"],
+            labels: [
+                "Health & Wellness - No Disclosure",
+                "Health Supplements - Policy Violation",
+                "Weight Loss - Missing #Ad",
+                "Health Products - Commercial Content",
+                "Health & Wellness Supplements - Unlabeled"
+            ]
+        },
+        Tobacco: {
+            keywords: ["tobacco", "cigarette", "vape", "smoking", "nicotine", "cigar"],
+            labels: [
+                "Tobacco - No Disclosure",
+                "Tobacco Products - Policy Violation",
+                "Tobacco Promotion - Missing #Ad",
+                "Tobacco Content - Commercial Content",
+                "Tobacco Products - Unlabeled"
+            ]
+        },
+        Weapons: {
+            keywords: ["weapon", "gun", "ammunition", "firearm", "shooting", "arms", "military"],
+            labels: [
+                "Weapons - No Disclosure",
+                "Weapon Products - Policy Violation",
+                "Weapon Promotion - Missing #Ad",
+                "Weapon Content - Commercial Content",
+                "Weapon Products - Unlabeled"
+            ]
+        }
+    };
+
+    // Enhanced industry detection with confidence scoring
+    function detectProhibitedIndustries(content) {
+        console.log('[Xrefhub Popup] Detecting prohibited industries...');
+        
+        const analysis = {
+            detectedIndustries: [],
+            confidence: 0.0,
+            severity: "NONE",
+            suggestedLabels: [],
+            primaryIndustry: "NONE"
+        };
+
+        // Check each prohibited industry
+        for (const [industry, config] of Object.entries(PROHIBITED_INDUSTRIES)) {
+            const foundKeywords = config.keywords.filter(keyword => 
+                content.toLowerCase().includes(keyword.toLowerCase())
+            );
+            
+            if (foundKeywords.length > 0) {
+                analysis.detectedIndustries.push({
+                    industry: industry,
+                    keywords: foundKeywords,
+                    confidence: Math.min(0.95, foundKeywords.length * 0.2),
+                    labels: config.labels
+                });
+                
+                console.log(`🚨 ${industry} detected with keywords: ${foundKeywords.join(', ')}`);
+            }
+        }
+
+        // Determine primary industry and overall confidence
+        if (analysis.detectedIndustries.length > 0) {
+            // Sort by confidence and take the highest
+            analysis.detectedIndustries.sort((a, b) => b.confidence - a.confidence);
+            const primary = analysis.detectedIndustries[0];
+            
+            analysis.primaryIndustry = primary.industry;
+            analysis.confidence = primary.confidence;
+            analysis.severity = primary.confidence > 0.8 ? "HIGH" : primary.confidence > 0.5 ? "MEDIUM" : "LOW";
+            analysis.suggestedLabels = primary.labels;
+            
+            console.log(`🎯 Primary industry: ${analysis.primaryIndustry} (confidence: ${analysis.confidence})`);
+        }
+
+        return analysis;
+    }
+
+    // Enhanced analysis with industry detection
+    async function enhancedAnalysisWithIndustryDetection(content, mediaUrl, images = []) {
+        console.log('[Xrefhub Popup] Starting enhanced analysis with industry detection...');
+        
+        try {
+            // First, detect prohibited industries
+            const industryAnalysis = detectProhibitedIndustries(content);
+            
+            // Get AI analysis
+            const aiResponse = await chrome.runtime.sendMessage({
+                action: 'handleAnalysis',
+                content: content,
+                mediaUrl: mediaUrl,
+                images: images
+            });
+
+            if (!aiResponse || aiResponse.error) {
+                throw new Error(aiResponse?.error || 'AI analysis failed');
+            }
+
+            // Combine AI analysis with industry detection
+            const enhancedAnalysis = {
+                ...aiResponse,
+                industryDetection: industryAnalysis,
+                combinedLabels: [...(aiResponse.suggestedLabels || []), ...industryAnalysis.suggestedLabels],
+                violationRisk: industryAnalysis.primaryIndustry !== "NONE" ? "HIGH" : "LOW",
+                enforcementAction: industryAnalysis.primaryIndustry !== "NONE" ? "BOUNCE POST" : "REVIEW"
+            };
+
+            console.log('[Xrefhub Popup] Enhanced analysis completed:', {
+                primaryIndustry: enhancedAnalysis.industryDetection.primaryIndustry,
+                confidence: enhancedAnalysis.industryDetection.confidence,
+                violationRisk: enhancedAnalysis.violationRisk,
+                enforcementAction: enhancedAnalysis.enforcementAction
+            });
+
+            return enhancedAnalysis;
+
+        } catch (error) {
+            console.error('[Xrefhub Popup] Enhanced analysis failed:', error);
+            throw error;
+        }
     }
 
     // --- Enhanced Error Handling ---
