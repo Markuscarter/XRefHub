@@ -48,31 +48,49 @@ async function loadModulesFallback() {
 
         // Basic Gemini API call
         async function callGeminiAPI(prompt, apiKey) {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }]
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Gemini API error: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const content = data.candidates[0].content.parts[0].text;
-            
             try {
-                return JSON.parse(content);
-            } catch (e) {
-                return { error: 'Failed to parse AI response', rawResponse: content };
+                const model = 'gemini-1.5-flash';
+                const body = {
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        maxOutputTokens: 4096,
+                        temperature: 0.7
+                    }
+                };
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Gemini API Error Response:', errorText);
+                    try {
+                        const errorBody = JSON.parse(errorText);
+                        throw new Error(`Gemini API error: ${errorBody.error?.message || response.statusText}`);
+                    } catch (parseError) {
+                        throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+                    }
+                }
+
+                const data = await response.json();
+                const content = data.candidates[0].content.parts[0].text;
+                console.log('Raw Gemini API Response content:', content);
+                
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    return { error: 'Failed to parse AI response', rawResponse: content };
+                }
+            } catch (error) {
+                console.error('Gemini API Error:', error);
+                throw new Error(`Gemini API error: ${error.message}`);
             }
         }
 
