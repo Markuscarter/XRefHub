@@ -969,6 +969,8 @@ async function fetchPolicyDocuments() {
  * @returns {Promise<string>} The detailed analysis text.
  */
 async function getDeeperAnalysis(content, mediaUrl) {
+    console.log('[Xrefhub Background] Starting deeper analysis with web research...');
+    
     let rules = '';
     
     // Try to get rules from Google Sheet first
@@ -994,7 +996,33 @@ async function getDeeperAnalysis(content, mediaUrl) {
         console.log('Drive rules not available for deeper analysis, continuing with available rules:', error.message);
     }
     
-    const analysis = await getDeeperAnalysisFromAI(content, mediaUrl, rules);
+    // Enhanced prompt for deeper analysis with web research
+    const enhancedPrompt = `You are an Expert Content Policy Analyst conducting a comprehensive "tell me why" analysis. 
+
+CONTENT TO ANALYZE:
+"${content}"
+${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+
+POLICY DOCUMENTS:
+${rules}
+
+DEEPER ANALYSIS REQUIREMENTS:
+1. **WHY** - Explain the reasoning behind the policy assessment
+2. **REAL DATA** - Reference specific policy sections, industry standards, and enforcement precedents
+3. **WEB SOURCES** - Include relevant external sources, case studies, and industry examples
+4. **CONTEXT** - Consider the broader social media landscape and platform-specific policies
+5. **IMPACT** - Assess potential user impact and platform risk
+
+Provide a comprehensive analysis that includes:
+- Detailed reasoning for policy decisions
+- Specific policy citations and references
+- Industry context and precedents
+- Risk assessment and impact analysis
+- Recommendations for content creators and platform enforcement
+
+Format as a detailed explanation with clear sections and supporting evidence.`;
+
+    const analysis = await getDeeperAnalysisFromAI(content, mediaUrl, enhancedPrompt);
     return analysis;
 }
 

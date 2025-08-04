@@ -9,10 +9,28 @@ class ReviewModeSelector {
         this.modes = {
             adReview: {
                 name: 'Ad Review',
-                description: 'Standard ad review approach',
+                description: 'Standard content analysis focusing on intent and context',
                 icon: '📋',
                 color: '#3b82f6',
-                aiPrompt: 'Analyze this content for general policy compliance and provide a standard review.',
+                aiPrompt: `You are a Content Policy Analyst. Analyze this content focusing on:
+
+CONTENT ANALYSIS:
+- Identify the main intent and purpose of the post
+- Determine the target audience and messaging approach
+- Assess the tone, style, and communication strategy
+- Evaluate if content is promotional, informational, or entertainment
+
+POLICY COMPLIANCE:
+- Check for potential policy violations (inappropriate content, misleading claims, etc.)
+- Assess accuracy and truthfulness of claims
+- Evaluate potential harm or risk to users
+
+Return a JSON object with:
+- "summary": Brief description of content intent and purpose (focus on what the post is trying to achieve)
+- "resolution": Policy compliance assessment (violation status and reasoning)
+- "suggestedLabels": Relevant policy labels
+- "policyDocument": Most relevant policy section
+- "policyReasoning": Specific policy justification`,
                 displayFormat: 'standard'
             },
             paidPartnership: {
@@ -20,34 +38,37 @@ class ReviewModeSelector {
                 description: 'X/Twitter paid partnership policy analysis',
                 icon: '💰',
                 color: '#f59e0b',
-                aiPrompt: `Analyze this content following X/Twitter's exact Paid Partnership Enforcement workflow:
+                aiPrompt: `You are a Paid Partnership Policy Specialist. Analyze this content specifically for X/Twitter's paid partnership compliance:
 
-STEP 1: Check if products/services generate commission for the user from sales (referral codes, affiliate links, discount codes, etc.)
-- If NO commission → No violation, stop here
-- If YES commission → Continue to Step 2
+PAID PARTNERSHIP DETECTION:
+- Check for commercial relationships (sponsored content, affiliate links, brand partnerships)
+- Identify promotional language and call-to-action elements
+- Assess if content promotes products/services for compensation
+- Look for disclosure indicators (#ad, #sponsored, #paid, etc.)
 
-STEP 2: Check if the post promotes or encourages users to use a product or service
-- If NO promotion → No violation, stop here  
-- If YES promotion → Continue to Step 3
+PROHIBITED INDUSTRIES CHECK:
+- Financial services, gambling, adult content, weapons, etc.
+- Health/wellness supplements, weight loss products
+- Political content for commercial purposes
 
-STEP 3: Check if post promotes content within a prohibited industry:
-- Adult merchandise, Alcoholic beverages, Contraceptives, Dating & Marriage Services
-- Drugs and drug-related products, Financial/financial-related products/services
-- Gambling products/services, Geo-political/political issues for commercial purposes
-- Health and wellness supplements, Tobacco products, Weapons/weapons-related products
-- Weight loss products and services
-- If YES prohibited industry → Continue to Step 4
-- If NO prohibited industry → Continue to Step 4
+COMPLIANCE ASSESSMENT:
+- Determine if proper disclosure is present
+- Assess if content violates prohibited industry rules
+- Evaluate overall paid partnership policy compliance
 
-STEP 4: Check if post contains disclaimer (#ad, #sponsored, #sponsoredpost, etc.)
-- If YES disclaimer AND NO prohibited industry → No violation
-- If NO disclaimer OR YES prohibited industry → VIOLATION
-
-VIOLATION ACTIONS:
-- Prohibited industry detected → BOUNCE POST (account locked)
-- No disclaimer found → BOUNCE POST (account locked)
-
-Focus on this exact step-by-step process to determine violation status.`,
+Return a JSON object with:
+- "summary": Content intent and commercial nature assessment
+- "resolution": Paid partnership compliance status and specific violations
+- "suggestedLabels": Paid partnership specific labels
+- "policyDocument": Relevant paid partnership policy
+- "policyReasoning": Specific policy violation reasoning
+- "workflowSteps": Step-by-step analysis process
+- "commissionDetected": Boolean for commission/compensation
+- "promotionDetected": Boolean for promotional content
+- "prohibitedIndustries": List of detected prohibited industries
+- "disclaimerPresent": Boolean for proper disclosure
+- "violation": Boolean for policy violation
+- "action": Recommended enforcement action`,
                 displayFormat: 'paidPartnership'
             }
         };

@@ -637,79 +637,47 @@ if (typeof window !== 'undefined') {
             year: '2-digit'
         });
 
-        const time = new Date().toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
+        // Get content summary from AI analysis
+        let contentSummary = '';
+        if (aiSummary && aiSummary.textContent) {
+            contentSummary = aiSummary.textContent.trim();
+        }
 
-        // Get detailed policy-based reasons
-        const policyReasons = await getPolicyBasedReasons(correctedLabels);
-        
-        // Enhanced formatting to prevent [object Object] issues
+        // Clean and truncate summary to 120 characters
+        contentSummary = contentSummary.replace(/[^\w\s\-_.,!?]/g, '').trim();
+        const shortSummary = contentSummary.length > 120 ? contentSummary.substring(0, 117) + '...' : contentSummary;
+
+        // Format labels as simple list
         const formattedLabels = correctedLabels.map((label, index) => {
-            // Ensure label is a string and handle complex objects
+            // Ensure label is a string
             let safeLabel = '';
             if (typeof label === 'string') {
                 safeLabel = label;
             } else if (typeof label === 'object' && label !== null) {
-                // Handle object labels - extract meaningful text
-                if (label.text) {
-                    safeLabel = label.text;
-                } else if (label.label) {
-                    safeLabel = label.label;
-                } else if (label.name) {
-                    safeLabel = label.name;
-                } else {
-                    safeLabel = JSON.stringify(label);
-                }
+                if (label.text) safeLabel = label.text;
+                else if (label.label) safeLabel = label.label;
+                else if (label.name) safeLabel = label.name;
+                else safeLabel = JSON.stringify(label);
             } else {
                 safeLabel = String(label);
             }
             
-            // Clean and truncate label
+            // Clean label
             safeLabel = safeLabel.replace(/[^\w\s\-_]/g, '').trim();
-            const truncatedLabel = safeLabel.length > 30 ? safeLabel.substring(0, 27) + '...' : safeLabel;
-            
-            // Get policy-based reason or fallback to resolution
-            let reason = policyReasons[index] || (aiResolution?.textContent || 'No resolution available');
-            
-            // Ensure reason is a string
-            if (typeof reason === 'object' && reason !== null) {
-                if (reason.text) {
-                    reason = reason.text;
-                } else if (reason.reason) {
-                    reason = reason.reason;
-                } else {
-                    reason = JSON.stringify(reason);
-                }
-            } else {
-                reason = String(reason);
-            }
-            
-            // Clean and truncate reason
-            reason = reason.replace(/[^\w\s\-_.,!?]/g, '').trim();
-            const truncatedReason = reason.length > 150 ? reason.substring(0, 147) + '...' : reason;
-            
-            // Format: Label - Reason - Username - Date/Time
-            return `${truncatedLabel} - ${truncatedReason} - ${username} - ${date} ${time}`;
+            return safeLabel;
         });
 
-        // Create structured output for copy/paste compatibility
-        const structuredOutput = {
-            timestamp: new Date().toISOString(),
-            username: username,
+        // Create final output format: Summary + Labels + Short Summary + Date/Signoff
+        const finalOutput = {
+            summary: contentSummary,
             labels: formattedLabels,
-            totalLabels: correctedLabels.length,
-            format: 'copy-paste-compatible'
+            shortSummary: shortSummary,
+            date: date,
+            username: username,
+            text: `${contentSummary}\n\nLabels: ${formattedLabels.join(', ')}\n\nSummary: ${shortSummary}\n\n${date} - ${username}`
         };
 
-        // Return both formatted text and structured data
-        return {
-            text: formattedLabels.join('\n'),
-            structured: structuredOutput,
-            copyText: formattedLabels.join('\n')
-        };
+        return finalOutput;
     }
 
     // --- Enhanced Object Serialization ---
@@ -1282,7 +1250,7 @@ ${content || 'No content extracted'}`;
         }
     });
 
-    // Chat functionality
+    // Enhanced AI Chat functionality with policy library access
     chatSendButton.addEventListener('click', async () => {
         const message = chatInput.value.trim();
         if (!message) return;
@@ -1292,21 +1260,48 @@ ${content || 'No content extracted'}`;
         updateChatLog();
         
         try {
+            // Get current review mode for context
+            const reviewMode = window.reviewModeSelector ? window.reviewModeSelector.getCurrentMode() : 'adReview';
+            const modeConfig = window.reviewModeSelector ? window.reviewModeSelector.getModeConfig() : null;
+            
+            // Get policy documents for AI context
+            const policyResponse = await chrome.runtime.sendMessage({
+                action: 'getPolicyDocuments'
+            });
+            
+            const policyContext = policyResponse?.policies ? 
+                `Policy Library Available: ${Object.keys(policyResponse.policies).join(', ')}` : 
+                'No policy documents available';
+            
+            const enhancedMessage = `[Review Mode: ${modeConfig?.name || 'Standard'}]
+[${policyContext}]
+
+User Question: ${message}
+
+Please provide a comprehensive answer that:
+1. Addresses the user's specific question
+2. References relevant policy documents when applicable
+3. Provides detailed explanations and reasoning
+4. Includes practical examples and recommendations
+5. Uses the policy library to quote specific sections when relevant`;
+
             const response = await chrome.runtime.sendMessage({
                 action: 'chat',
-                message,
-                history: chatHistory
+                message: enhancedMessage,
+                history: chatHistory,
+                reviewMode: reviewMode,
+                policyContext: policyContext
             });
             
             if (response && response.error) {
                 throw new Error(response.error);
             }
             
-            chatHistory.push({ role: 'assistant', content: response });
+            chatHistory.push({ role: 'assistant', content: response.reply || response });
             updateChatLog();
             
         } catch (error) {
-            console.error('[Xrefhub Popup] Chat failed:', error);
+            console.error('[Xrefhub Popup] Enhanced chat failed:', error);
             chatHistory.push({ role: 'assistant', content: `Error: ${error.message}` });
             updateChatLog();
         }
