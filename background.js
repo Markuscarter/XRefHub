@@ -35,11 +35,19 @@ async function loadModulesFallback() {
         async function getApiKey(provider) {
             return new Promise((resolve) => {
                 chrome.storage.local.get(['settings'], (result) => {
+                    console.log('[Xrefhub Background] Storage result:', result);
+                    console.log('[Xrefhub Background] Settings:', result.settings);
+                    
                     if (provider === 'gemini') {
-                        resolve(result.settings?.geminiApiKey);
+                        const apiKey = result.settings?.geminiApiKey;
+                        console.log('[Xrefhub Background] Gemini API key found:', !!apiKey, apiKey ? `${apiKey.substring(0, 10)}...` : 'none');
+                        resolve(apiKey);
                     } else if (provider === 'chatgpt') {
-                        resolve(result.settings?.chatgptApiKey);
+                        const apiKey = result.settings?.chatgptApiKey;
+                        console.log('[Xrefhub Background] ChatGPT API key found:', !!apiKey, apiKey ? `${apiKey.substring(0, 10)}...` : 'none');
+                        resolve(apiKey);
                     } else {
+                        console.log('[Xrefhub Background] Unknown provider:', provider);
                         resolve(null);
                     }
                 });
@@ -97,7 +105,10 @@ async function loadModulesFallback() {
         // Define the AI functions
         analyzePost = async (content, mediaUrl, rules, images = []) => {
             const provider = await getAiProvider();
+            console.log('[Xrefhub Background] AI Provider:', provider);
+            
             const apiKey = await getApiKey(provider);
+            console.log('[Xrefhub Background] API Key retrieved:', !!apiKey, apiKey ? `${apiKey.substring(0, 10)}...` : 'none');
             
             if (!apiKey) {
                 throw new Error('API key not set. Please configure in settings.');
