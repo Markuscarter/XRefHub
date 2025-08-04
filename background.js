@@ -54,6 +54,106 @@ async function loadModulesFallback() {
             });
         }
 
+        // Get Grock token from storage
+        async function getGrockToken() {
+            return new Promise((resolve) => {
+                chrome.storage.local.get(['grockToken'], (result) => {
+                    resolve(result.grockToken || null);
+                });
+            });
+        }
+
+        // Basic Grock API call
+        async function callGrock(prompt, token) {
+            try {
+                const body = {
+                    model: "grock-beta",
+                    messages: [{ role: "user", content: prompt }],
+                    max_tokens: 4096,
+                    temperature: 0.7,
+                    response_format: { "type": "json_object" }
+                };
+
+                const response = await fetch('https://api.x.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Grock API Error Response:', errorText);
+                    try {
+                        const errorBody = JSON.parse(errorText);
+                        throw new Error(`Grock API error: ${errorBody.error?.message || response.statusText}`);
+                    } catch (parseError) {
+                        throw new Error(`Grock API error: ${response.status} - ${errorText}`);
+                    }
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                console.log('Raw Grock API Response content:', content);
+                
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    return { error: 'Failed to parse AI response', rawResponse: content };
+                }
+            } catch (error) {
+                console.error('Grock API Error:', error);
+                throw new Error(`Grock API error: ${error.message}`);
+            }
+        }
+
+        // Basic OpenAI API call
+        async function callOpenAI(prompt, apiKey) {
+            try {
+                const body = {
+                    model: "gpt-3.5-turbo",
+                    messages: [{ role: "user", content: prompt }],
+                    max_tokens: 4096,
+                    response_format: { "type": "json_object" }
+                };
+
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('OpenAI API Error Response:', errorText);
+                    try {
+                        const errorBody = JSON.parse(errorText);
+                        throw new Error(`OpenAI API error: ${errorBody.error?.message || response.statusText}`);
+                    } catch (parseError) {
+                        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+                    }
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                console.log('Raw OpenAI API Response content:', content);
+                
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    return { error: 'Failed to parse AI response', rawResponse: content };
+                }
+            } catch (error) {
+                console.error('OpenAI API Error:', error);
+                throw new Error(`OpenAI API error: ${error.message}`);
+            }
+        }
+
         // Basic Gemini API call
         async function callGeminiAPI(prompt, apiKey) {
             try {
@@ -102,18 +202,11 @@ async function loadModulesFallback() {
             }
         }
 
-        // Define the AI functions
+        // Define the AI functions with fallback system
         analyzePost = async (content, mediaUrl, rules, images = []) => {
-            const provider = await getAiProvider();
-            console.log('[Xrefhub Background] AI Provider:', provider);
+            const primaryProvider = await getAiProvider();
+            console.log('[Xrefhub Background] Primary AI Provider:', primaryProvider);
             
-            const apiKey = await getApiKey(provider);
-            console.log('[Xrefhub Background] API Key retrieved:', !!apiKey, apiKey ? `${apiKey.substring(0, 10)}...` : 'none');
-            
-            if (!apiKey) {
-                throw new Error('API key not set. Please configure in settings.');
-            }
-
             // Check if rules is actually a mode-specific prompt
             const isModeSpecificPrompt = typeof rules === 'string' && rules.includes('STEP 1:') && rules.includes('VIOLATION ACTIONS:');
             
@@ -138,7 +231,57 @@ async function loadModulesFallback() {
                 console.log('[Xrefhub Background] Using standard prompt for analysis');
             }
 
-            return await callGeminiAPI(prompt, apiKey);
+            // Try providers in order: primary provider, then fallbacks
+            const providers = [primaryProvider];
+            
+            // Add fallback providers if primary is not already in the list
+            if (primaryProvider !== 'gemini') providers.push('gemini');
+            if (primaryProvider !== 'chatgpt') providers.push('chatgpt');
+            if (primaryProvider !== 'grock') providers.push('grock');
+            
+            console.log('[Xrefhub Background] Will try providers in order:', providers);
+            
+            // Try each provider until one works
+            for (const provider of providers) {
+                try {
+                    console.log(`[Xrefhub Background] Trying provider: ${provider}`);
+                    
+                    const apiKey = await getApiKey(provider);
+                    console.log(`[Xrefhub Background] ${provider} API Key retrieved:`, !!apiKey, apiKey ? `${apiKey.substring(0, 10)}...` : 'none');
+                    
+                    if (!apiKey) {
+                        console.log(`[Xrefhub Background] No API key for ${provider}, trying next provider`);
+                        continue;
+                    }
+                    
+                    // Try the API call
+                    if (provider === 'gemini') {
+                        const result = await callGeminiAPI(prompt, apiKey);
+                        console.log(`[Xrefhub Background] ✅ ${provider} analysis successful`);
+                        return { ...result, providerUsed: provider };
+                    } else if (provider === 'chatgpt') {
+                        const result = await callOpenAI(prompt, apiKey);
+                        console.log(`[Xrefhub Background] ✅ ${provider} analysis successful`);
+                        return { ...result, providerUsed: provider };
+                    } else if (provider === 'grock') {
+                        const token = await getGrockToken();
+                        if (!token) {
+                            console.log(`[Xrefhub Background] No Grock token available, trying next provider`);
+                            continue;
+                        }
+                        const result = await callGrock(prompt, token);
+                        console.log(`[Xrefhub Background] ✅ ${provider} analysis successful`);
+                        return { ...result, providerUsed: provider };
+                    }
+                    
+                } catch (error) {
+                    console.log(`[Xrefhub Background] ❌ ${provider} failed:`, error.message);
+                    // Continue to next provider
+                }
+            }
+            
+            // If all providers failed
+            throw new Error(`All AI providers failed. Please check your API keys in settings.`);
         };
         
         getChatReply = async (message, history) => {
