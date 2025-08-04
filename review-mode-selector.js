@@ -140,7 +140,7 @@ Focus on this exact step-by-step process to determine violation status.`,
         `;
 
         // Add event listeners
-        const buttons = container.querySelectorAll('.review-mode-button');
+        const buttons = container.querySelectorAll('.compact-review-mode-button');
         buttons.forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;

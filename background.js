@@ -103,17 +103,29 @@ async function loadModulesFallback() {
                 throw new Error('API key not set. Please configure in settings.');
             }
 
-            const prompt = `
-                You are an Expert Content Policy Analyst. Analyze this content:
-                
-                Content: "${content}"
-                ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
-                ${images.length > 0 ? `Images: ${images.length} found` : ''}
-                
-                Rules: ${rules}
-                
-                Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning
-            `;
+            // Check if rules is actually a mode-specific prompt
+            const isModeSpecificPrompt = typeof rules === 'string' && rules.includes('STEP 1:') && rules.includes('VIOLATION ACTIONS:');
+            
+            let prompt;
+            if (isModeSpecificPrompt) {
+                // Use the mode-specific prompt directly
+                prompt = rules;
+                console.log('[Xrefhub Background] Using mode-specific prompt for analysis');
+            } else {
+                // Use standard prompt
+                prompt = `
+                    You are an Expert Content Policy Analyst. Analyze this content:
+                    
+                    Content: "${content}"
+                    ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+                    ${images.length > 0 ? `Images: ${images.length} found` : ''}
+                    
+                    Rules: ${rules}
+                    
+                    Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning
+                `;
+                console.log('[Xrefhub Background] Using standard prompt for analysis');
+            }
 
             return await callGeminiAPI(prompt, apiKey);
         };
@@ -317,12 +329,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
                 console.log('📝 Content preview:', request.content?.substring(0, 100) + '...');
                 console.log('🖼️ Images to analyze:', request.images?.length || 0);
+                console.log('🎯 Review mode:', request.reviewMode || 'adReview');
+                console.log('📋 Mode prompt available:', !!request.modePrompt);
                 
-                const analysis = await handleAnalysis(request.content, request.mediaUrl, request.images);
+                const analysis = await handleAnalysis(request.content, request.mediaUrl, request.images, request.reviewMode, request.modePrompt);
                 console.log('✅ Analysis completed:', {
                     hasSummary: !!analysis.summary,
                     hasResolution: !!analysis.resolution,
-                    suggestedLabels: analysis.suggestedLabels?.length || 0
+                    suggestedLabels: analysis.suggestedLabels?.length || 0,
+                    reviewMode: request.reviewMode || 'adReview'
                 });
                 
                 sendResponse(analysis);
@@ -702,7 +717,7 @@ async function scanPage(tabId) {
  * @param {Array} images Optional array of images to analyze.
  * @returns {Promise<object>} The analysis result from the AI.
  */
-export async function handleAnalysis(content, mediaUrl, images = []) {
+export async function handleAnalysis(content, mediaUrl, images = [], reviewMode = 'adReview', modePrompt = null) {
     let rules = '';
     
     // Try to get rules from Google Sheet first
@@ -728,8 +743,34 @@ export async function handleAnalysis(content, mediaUrl, images = []) {
         console.log('Drive rules not available, continuing with available rules:', error.message);
     }
     
-    const analysis = await analyzePost(content, mediaUrl, rules, images);
-    return analysis;
+    // Use mode-specific prompt if provided, otherwise use standard analysis
+    if (modePrompt && reviewMode === 'paidPartnership') {
+        console.log('🎯 Using Paid Partnership mode analysis');
+        const enhancedPrompt = `${modePrompt}
+
+Content to analyze: "${content}"
+${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+${images.length > 0 ? `Images: ${images.length} found` : ''}
+
+Rules: ${rules}
+
+Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning, workflowSteps, commissionDetected, promotionDetected, prohibitedIndustries, disclaimerPresent, violation, action, reasoning`;
+
+        const analysis = await analyzePost(content, mediaUrl, enhancedPrompt, images);
+        return {
+            ...analysis,
+            reviewMode: 'paidPartnership',
+            modeUsed: 'paidPartnership'
+        };
+    } else {
+        console.log('📋 Using standard Ad Review mode analysis');
+        const analysis = await analyzePost(content, mediaUrl, rules, images);
+        return {
+            ...analysis,
+            reviewMode: 'adReview',
+            modeUsed: 'adReview'
+        };
+    }
 }
 
 /**
