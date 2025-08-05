@@ -908,7 +908,7 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
             .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
             .join('\n\n');
         
-        // Add relevant knowledge graphs
+        // Add relevant knowledge graphs and enforcement workflows
         const relevantKnowledgeGraphs = Object.entries(structuredDocs.knowledgeGraphs)
             .filter(([name, graph]) => 
                 name.toLowerCase().includes('paid') || 
@@ -916,6 +916,25 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
                 name.toLowerCase().includes('commercial')
             )
             .map(([name, graph]) => `<knowledge_graph name="${name}">\n${JSON.stringify(graph.content, null, 2)}\n</knowledge_graph>`)
+            .join('\n\n');
+        
+        // Add enforcement workflows for paid partnership
+        const enforcementWorkflows = Object.entries(structuredDocs.enforcementWorkflows)
+            .filter(([name, workflow]) => 
+                name.toLowerCase().includes('paid') || 
+                name.toLowerCase().includes('partnership') ||
+                name.toLowerCase().includes('commercial')
+            )
+            .map(([name, workflow]) => `<enforcement_workflow name="${name}">\n${workflow.content}\n</enforcement_workflow>`)
+            .join('\n\n');
+        
+        // Add master consolidated data if available
+        const masterData = Object.entries(structuredDocs.masterConsolidated)
+            .filter(([name, data]) => 
+                name.toLowerCase().includes('paid') || 
+                name.toLowerCase().includes('partnership')
+            )
+            .map(([name, data]) => `<master_consolidated name="${name}">\n${JSON.stringify(data.content, null, 2)}\n</master_consolidated>`)
             .join('\n\n');
         
         const enhancedPrompt = `${modePrompt}
@@ -931,15 +950,22 @@ ${paidPartnershipPolicies}
 KNOWLEDGE GRAPHS:
 ${relevantKnowledgeGraphs}
 
+ENFORCEMENT WORKFLOWS:
+${enforcementWorkflows}
+
+MASTER CONSOLIDATED DATA:
+${masterData}
+
 SHEET LABELS:
 ${rules}
 
 ANALYSIS INSTRUCTIONS:
 1. First, review the PAID PARTNERSHIP POLICY DOCUMENTS above
-2. Identify which specific policy documents apply to this content
-3. Reference specific policy sections by name when making decisions
-4. Follow the step-by-step workflow for paid partnership compliance
-5. Use the SHEET LABELS as reference for final labeling
+2. Use the KNOWLEDGE GRAPHS to identify patterns and relationships
+3. Follow the ENFORCEMENT WORKFLOWS for step-by-step compliance checking
+4. Reference MASTER CONSOLIDATED DATA for comprehensive policy coverage
+5. Reference specific policy sections by name when making decisions
+6. Use the SHEET LABELS as reference for final labeling
 
 Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning, workflowSteps, commissionDetected, promotionDetected, prohibitedIndustries, disclaimerPresent, violation, action, reasoning`;
 
@@ -963,7 +989,7 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
             .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
             .join('\n\n');
         
-        // Add relevant knowledge graphs
+        // Add relevant knowledge graphs and enforcement workflows
         const relevantKnowledgeGraphs = Object.entries(structuredDocs.knowledgeGraphs)
             .filter(([name, graph]) => 
                 !name.toLowerCase().includes('paid') && 
@@ -971,6 +997,25 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
                 !name.toLowerCase().includes('commercial')
             )
             .map(([name, graph]) => `<knowledge_graph name="${name}">\n${JSON.stringify(graph.content, null, 2)}\n</knowledge_graph>`)
+            .join('\n\n');
+        
+        // Add enforcement workflows for general content review
+        const enforcementWorkflows = Object.entries(structuredDocs.enforcementWorkflows)
+            .filter(([name, workflow]) => 
+                !name.toLowerCase().includes('paid') && 
+                !name.toLowerCase().includes('partnership') &&
+                !name.toLowerCase().includes('commercial')
+            )
+            .map(([name, workflow]) => `<enforcement_workflow name="${name}">\n${workflow.content}\n</enforcement_workflow>`)
+            .join('\n\n');
+        
+        // Add master consolidated data if available
+        const masterData = Object.entries(structuredDocs.masterConsolidated)
+            .filter(([name, data]) => 
+                !name.toLowerCase().includes('paid') && 
+                !name.toLowerCase().includes('partnership')
+            )
+            .map(([name, data]) => `<master_consolidated name="${name}">\n${JSON.stringify(data.content, null, 2)}\n</master_consolidated>`)
             .join('\n\n');
         
         const enhancedPrompt = `You are a Content Policy Analyst. Analyze this content focusing on:
@@ -997,15 +1042,23 @@ ${generalPolicies}
 KNOWLEDGE GRAPHS:
 ${relevantKnowledgeGraphs}
 
+ENFORCEMENT WORKFLOWS:
+${enforcementWorkflows}
+
+MASTER CONSOLIDATED DATA:
+${masterData}
+
 SHEET LABELS:
 ${rules}
 
 ANALYSIS INSTRUCTIONS:
 1. First, review the GENERAL POLICY DOCUMENTS above
-2. Identify which specific policy documents apply to this content
-3. Reference specific policy sections by name when making decisions
-4. Focus on content intent and general policy compliance
-5. Use the SHEET LABELS as reference for final labeling
+2. Use the KNOWLEDGE GRAPHS to identify patterns and relationships
+3. Follow the ENFORCEMENT WORKFLOWS for step-by-step compliance checking
+4. Reference MASTER CONSOLIDATED DATA for comprehensive policy coverage
+5. Reference specific policy sections by name when making decisions
+6. Focus on content intent and general policy compliance
+7. Use the SHEET LABELS as reference for final labeling
 
 Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning`;
 

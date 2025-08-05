@@ -339,7 +339,7 @@ export async function discoverXRefHubFolder() {
 } 
 
 /**
- * Fetches structured knowledge graphs and policy documents with proper categorization.
+ * Fetches structured documents from the XrefHub_Policy_Analysis folder structure.
  * @param {string} category Optional category filter ('adReview', 'paidPartnership', 'knowledgeGraphs', 'all')
  * @returns {Promise<object>} Object with categorized documents and knowledge graphs.
  */
@@ -353,108 +353,170 @@ export async function fetchStructuredDocuments(category = 'all') {
       return { policies: {}, knowledgeGraphs: {}, metadata: {} };
     }
 
-    console.log(`[GoogleDrive] Fetching structured documents from folder: ${folderId} (category: ${category})`);
+    console.log(`[GoogleDrive] Fetching structured documents from XrefHub_Policy_Analysis (category: ${category})`);
 
     const token = await getAuthToken();
     
-    // Fetch all documents in the folder
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,createdTime,modifiedTime)`, {
+    // First, find the XrefHub_Policy_Analysis folder
+    const mainFolderResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='XrefHub_Policy_Analysis' and '${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (!response.ok) {
-      throw new Error(`Google Drive API request failed with status ${response.status}`);
+    if (!mainFolderResponse.ok) {
+      throw new Error(`Failed to find XrefHub_Policy_Analysis folder. Status: ${mainFolderResponse.status}`);
     }
 
-    const data = await response.json();
-    if (!data.files || data.files.length === 0) {
-      console.log(`No documents found in folder: ${folderId}`);
-      return { policies: {}, knowledgeGraphs: {}, metadata: {} };
+    const mainFolderData = await mainFolderResponse.json();
+    if (!mainFolderData.files || mainFolderData.files.length === 0) {
+      console.log('XrefHub_Policy_Analysis folder not found. Creating structure...');
+      const structure = await createRecommendedStructure();
+      return await fetchStructuredDocuments(category); // Retry after creating structure
     }
 
-    console.log(`[GoogleDrive] Found ${data.files.length} documents`);
+    const mainFolderId = mainFolderData.files[0].id;
+    console.log(`Found XrefHub_Policy_Analysis folder: ${mainFolderId}`);
+
+    // Fetch all subfolders
+    const subfoldersResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q='${mainFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&orderBy=name`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!subfoldersResponse.ok) {
+      throw new Error(`Failed to fetch subfolders. Status: ${subfoldersResponse.status}`);
+    }
+
+    const subfoldersData = await subfoldersResponse.json();
+    const subfolders = {};
+    
+    if (subfoldersData.files) {
+      for (const folder of subfoldersData.files) {
+        subfolders[folder.name] = folder.id;
+        console.log(`Found subfolder: ${folder.name} (${folder.id})`);
+      }
+    }
 
     const structuredDocs = {
       policies: {},
       knowledgeGraphs: {},
+      vectorChunks: {},
+      enforcementWorkflows: {},
+      masterConsolidated: {},
       metadata: {
         adReview: [],
         paidPartnership: [],
         knowledgeGraphs: [],
+        vectorChunks: [],
+        enforcementWorkflows: [],
         general: []
       }
     };
 
-    // Process each document
-    for (const file of data.files) {
-      try {
-        const content = await getRuleFileContent(file.id);
-        if (!content) continue;
+    // Process documents from each subfolder
+    for (const [folderName, folderId] of Object.entries(subfolders)) {
+      console.log(`Processing folder: ${folderName}`);
+      
+      const filesResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,createdTime,modifiedTime)`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
-        // Categorize based on filename and content
-        const category = categorizeDocument(file.name, content);
-        
-        if (category === 'knowledgeGraph') {
-          try {
-            // Try to parse as JSON knowledge graph
-            const graphData = JSON.parse(content);
-            structuredDocs.knowledgeGraphs[file.name] = {
-              content: graphData,
-              metadata: {
-                id: file.id,
-                name: file.name,
-                createdTime: file.createdTime,
-                modifiedTime: file.modifiedTime,
-                type: 'knowledgeGraph'
-              }
-            };
-            structuredDocs.metadata.knowledgeGraphs.push(file.name);
-          } catch (parseError) {
-            console.warn(`Failed to parse ${file.name} as JSON knowledge graph:`, parseError);
-            // Fall back to text content
-            structuredDocs.knowledgeGraphs[file.name] = {
-              content: content,
-              metadata: {
-                id: file.id,
-                name: file.name,
-                createdTime: file.createdTime,
-                modifiedTime: file.modifiedTime,
-                type: 'text'
-              }
-            };
-            structuredDocs.metadata.knowledgeGraphs.push(file.name);
-          }
-        } else {
-          // Policy document
-          structuredDocs.policies[file.name] = {
-            content: content,
-            category: category,
-            metadata: {
-              id: file.id,
-              name: file.name,
-              createdTime: file.createdTime,
-              modifiedTime: file.modifiedTime,
-              type: 'policy'
-            }
+      if (!filesResponse.ok) continue;
+
+      const filesData = await filesResponse.json();
+      if (!filesData.files) continue;
+
+      for (const file of filesData.files) {
+        try {
+          const content = await getRuleFileContent(file.id);
+          if (!content) continue;
+
+          const fileMetadata = {
+            id: file.id,
+            name: file.name,
+            folder: folderName,
+            createdTime: file.createdTime,
+            modifiedTime: file.modifiedTime
           };
-          
-          // Add to appropriate category metadata
-          if (category === 'adReview') {
-            structuredDocs.metadata.adReview.push(file.name);
-          } else if (category === 'paidPartnership') {
-            structuredDocs.metadata.paidPartnership.push(file.name);
-          } else {
-            structuredDocs.metadata.general.push(file.name);
+
+          // Categorize based on folder and content
+          if (folderName === '01_Policy_Documents') {
+            const category = categorizeDocument(file.name, content);
+            structuredDocs.policies[file.name] = {
+              content: content,
+              category: category,
+              metadata: { ...fileMetadata, type: 'policy' }
+            };
+            
+            if (category === 'adReview') {
+              structuredDocs.metadata.adReview.push(file.name);
+            } else if (category === 'paidPartnership') {
+              structuredDocs.metadata.paidPartnership.push(file.name);
+            } else {
+              structuredDocs.metadata.general.push(file.name);
+            }
+          } else if (folderName === '02_JSON_Extracts') {
+            try {
+              const jsonData = JSON.parse(content);
+              structuredDocs.policies[file.name] = {
+                content: jsonData,
+                category: 'jsonExtract',
+                metadata: { ...fileMetadata, type: 'jsonExtract' }
+              };
+            } catch (parseError) {
+              console.warn(`Failed to parse ${file.name} as JSON:`, parseError);
+            }
+          } else if (folderName === '03_Vector_Chunks') {
+            structuredDocs.vectorChunks[file.name] = {
+              content: content,
+              metadata: { ...fileMetadata, type: 'vectorChunk' }
+            };
+            structuredDocs.metadata.vectorChunks.push(file.name);
+          } else if (folderName === '04_Knowledge_Graphs') {
+            try {
+              const graphData = JSON.parse(content);
+              structuredDocs.knowledgeGraphs[file.name] = {
+                content: graphData,
+                metadata: { ...fileMetadata, type: 'knowledgeGraph' }
+              };
+              structuredDocs.metadata.knowledgeGraphs.push(file.name);
+            } catch (parseError) {
+              console.warn(`Failed to parse ${file.name} as knowledge graph:`, parseError);
+            }
+          } else if (folderName === '05_Enforcement_Workflows') {
+            structuredDocs.enforcementWorkflows[file.name] = {
+              content: content,
+              metadata: { ...fileMetadata, type: 'enforcementWorkflow' }
+            };
+            structuredDocs.metadata.enforcementWorkflows.push(file.name);
+          } else if (folderName === '06_Master_Consolidated') {
+            try {
+              const consolidatedData = JSON.parse(content);
+              structuredDocs.masterConsolidated[file.name] = {
+                content: consolidatedData,
+                metadata: { ...fileMetadata, type: 'masterConsolidated' }
+              };
+            } catch (parseError) {
+              structuredDocs.masterConsolidated[file.name] = {
+                content: content,
+                metadata: { ...fileMetadata, type: 'masterConsolidated' }
+              };
+            }
           }
+          
+          console.log(`[GoogleDrive] Processed ${file.name} from ${folderName}`);
+        } catch (error) {
+          console.error(`Error processing document ${file.name}:`, error);
         }
-        
-        console.log(`[GoogleDrive] Categorized ${file.name} as ${category}`);
-      } catch (error) {
-        console.error(`Error processing document ${file.name}:`, error);
       }
     }
     
-    console.log(`[GoogleDrive] Successfully structured ${Object.keys(structuredDocs.policies).length} policies and ${Object.keys(structuredDocs.knowledgeGraphs).length} knowledge graphs`);
+    console.log(`[GoogleDrive] Successfully structured documents:`, {
+      policies: Object.keys(structuredDocs.policies).length,
+      knowledgeGraphs: Object.keys(structuredDocs.knowledgeGraphs).length,
+      vectorChunks: Object.keys(structuredDocs.vectorChunks).length,
+      enforcementWorkflows: Object.keys(structuredDocs.enforcementWorkflows).length,
+      masterConsolidated: Object.keys(structuredDocs.masterConsolidated).length
+    });
+    
     return structuredDocs;
   } catch (error) {
     console.error('Error fetching structured documents:', error);
@@ -513,7 +575,7 @@ function categorizeDocument(filename, content) {
 }
 
 /**
- * Creates recommended folder structure in Google Drive.
+ * Creates the XrefHub_Policy_Analysis folder structure in Google Drive.
  * @returns {Promise<object>} Object with created folder IDs.
  */
 export async function createRecommendedStructure() {
@@ -526,27 +588,50 @@ export async function createRecommendedStructure() {
       throw new Error('No parent folder ID configured');
     }
 
+    // First, create the main XrefHub_Policy_Analysis folder
+    const mainFolderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: 'XrefHub_Policy_Analysis',
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId]
+      })
+    });
+
+    if (!mainFolderResponse.ok) {
+      throw new Error(`Failed to create main folder. Status: ${mainFolderResponse.status}`);
+    }
+
+    const mainFolderData = await mainFolderResponse.json();
+    const mainFolderId = mainFolderData.id;
+    console.log(`Created main folder: XrefHub_Policy_Analysis (${mainFolderId})`);
+
     const folders = {
-      policies: {
-        adReview: null,
-        paidPartnership: null,
-        general: null
-      },
-      knowledgeGraphs: {
-        entities: null,
-        relationships: null,
-        rules: null
-      },
-      templates: null,
-      examples: null
+      policyDocuments: null,
+      jsonExtracts: null,
+      vectorChunks: null,
+      knowledgeGraphs: null,
+      enforcementWorkflows: null,
+      masterConsolidated: null,
+      updateTemplates: null
     };
 
-    // Create policy subfolders
-    for (const [category, folderName] of Object.entries({
-      adReview: '01-Ad_Review_Policies',
-      paidPartnership: '02-Paid_Partnership_Policies', 
-      general: '03-General_Policies'
-    })) {
+    // Create the numbered subfolders
+    const subfolders = [
+      { name: '01_Policy_Documents', key: 'policyDocuments' },
+      { name: '02_JSON_Extracts', key: 'jsonExtracts' },
+      { name: '03_Vector_Chunks', key: 'vectorChunks' },
+      { name: '04_Knowledge_Graphs', key: 'knowledgeGraphs' },
+      { name: '05_Enforcement_Workflows', key: 'enforcementWorkflows' },
+      { name: '06_Master_Consolidated', key: 'masterConsolidated' },
+      { name: '07_Update_Templates', key: 'updateTemplates' }
+    ];
+
+    for (const folder of subfolders) {
       const response = await fetch('https://www.googleapis.com/drive/v3/files', {
         method: 'POST',
         headers: {
@@ -554,71 +639,28 @@ export async function createRecommendedStructure() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          name: folderName,
+          name: folder.name,
           mimeType: 'application/vnd.google-apps.folder',
-          parents: [parentFolderId]
+          parents: [mainFolderId]
         })
       });
 
       if (response.ok) {
         const folderData = await response.json();
-        folders.policies[category] = folderData.id;
-        console.log(`Created ${folderName}: ${folderData.id}`);
+        folders[folder.key] = folderData.id;
+        console.log(`Created ${folder.name}: ${folderData.id}`);
+      } else {
+        console.error(`Failed to create ${folder.name}: ${response.status}`);
       }
     }
 
-    // Create knowledge graph subfolders
-    for (const [category, folderName] of Object.entries({
-      entities: '04-Entity_Knowledge_Graphs',
-      relationships: '05-Relationship_Knowledge_Graphs',
-      rules: '06-Rule_Knowledge_Graphs'
-    })) {
-      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-          parents: [parentFolderId]
-        })
-      });
-
-      if (response.ok) {
-        const folderData = await response.json();
-        folders.knowledgeGraphs[category] = folderData.id;
-        console.log(`Created ${folderName}: ${folderData.id}`);
-      }
-    }
-
-    // Create additional folders
-    for (const folderName of ['07-Templates', '08-Examples']) {
-      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-          parents: [parentFolderId]
-        })
-      });
-
-      if (response.ok) {
-        const folderData = await response.json();
-        folders[folderName.split('-')[1].toLowerCase()] = folderData.id;
-        console.log(`Created ${folderName}: ${folderData.id}`);
-      }
-    }
-
-    console.log('[GoogleDrive] Created recommended folder structure');
-    return folders;
+    console.log('[GoogleDrive] Created XrefHub_Policy_Analysis folder structure');
+    return {
+      mainFolder: mainFolderId,
+      subfolders: folders
+    };
   } catch (error) {
-    console.error('Error creating recommended structure:', error);
+    console.error('Error creating XrefHub_Policy_Analysis structure:', error);
     throw error;
   }
 } 
