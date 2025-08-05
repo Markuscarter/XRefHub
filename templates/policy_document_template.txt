@@ -1,0 +1,55 @@
+POLICY DOCUMENT: [Document Name]
+VERSION: 1.0.0
+LAST UPDATED: [YYYY-MM-DD]
+CATEGORY: [adReview|paidPartnership|general]
+
+PURPOSE:
+[Brief description of what this policy covers and its scope]
+
+SCOPE:
+[What content, activities, or scenarios this policy applies to]
+
+RULES:
+1. [Rule Title]
+   - Description: [Detailed explanation of the rule]
+   - Criteria: [Specific criteria for enforcement]
+   - Examples: [Examples of what constitutes compliance/violation]
+
+2. [Rule Title]
+   - Description: [Detailed explanation of the rule]
+   - Criteria: [Specific criteria for enforcement]
+   - Examples: [Examples of what constitutes compliance/violation]
+
+3. [Rule Title]
+   - Description: [Detailed explanation of the rule]
+   - Criteria: [Specific criteria for enforcement]
+   - Examples: [Examples of what constitutes compliance/violation]
+
+ENFORCEMENT CRITERIA:
+- [Criterion 1]: [Description]
+- [Criterion 2]: [Description]
+- [Criterion 3]: [Description]
+
+EXAMPLES:
+✅ COMPLIANT:
+[Example of compliant content with explanation]
+
+✅ COMPLIANT:
+[Another example of compliant content]
+
+❌ VIOLATION:
+[Example of violating content with explanation]
+
+❌ VIOLATION:
+[Another example of violating content]
+
+ENFORCEMENT:
+[How violations are handled, including escalation procedures]
+
+REFERENCES:
+- [Related policy document 1]
+- [Related policy document 2]
+- [External source or regulation]
+
+NOTES:
+[Additional notes, exceptions, or special considerations] 

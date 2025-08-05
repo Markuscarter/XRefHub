@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "name": "[graph_name]",
+    "version": "1.0.0",
+    "description": "[Brief description of what this knowledge graph contains]",
+    "created": "[YYYY-MM-DD]",
+    "updated": "[YYYY-MM-DD]",
+    "author": "[Author Name]",
+    "category": "[entity|relationship|rule]",
+    "tags": ["tag1", "tag2", "tag3"]
+  },
+  "usage_notes": {
+    "ai_prompt_context": "[How the AI should use this knowledge graph in analysis]",
+    "update_frequency": "[How often this should be updated - daily|weekly|monthly]",
+    "dependencies": ["[Other knowledge graphs or policies this depends on]"],
+    "priority": "[high|medium|low]"
+  },
+  "data": {
+    // Entity Knowledge Graph Structure
+    "entities": [
+      {
+        "id": "[unique_identifier]",
+        "name": "[Entity Name]",
+        "type": "[entity_type]",
+        "attributes": {
+          "risk_level": "[high|medium|low]",
+          "compliance_requirements": ["requirement1", "requirement2"],
+          "keywords": ["keyword1", "keyword2", "keyword3"],
+          "description": "[Brief description]"
+        },
+        "relationships": [
+          {
+            "target": "[related_entity_id]",
+            "type": "[relationship_type]",
+            "strength": "[strong|medium|weak]"
+          }
+        ]
+      }
+    ],
+    
+    // Relationship Knowledge Graph Structure
+    "relationships": [
+      {
+        "id": "[unique_identifier]",
+        "source": "[source_entity_type]",
+        "target": "[target_entity_type]",
+        "type": "[relationship_type]",
+        "rules": {
+          "disclosure_required": true,
+          "disclosure_format": "[#ad|#sponsored|#partner]",
+          "content_restrictions": ["restriction1", "restriction2"],
+          "enforcement_level": "[strict|moderate|flexible]"
+        },
+        "examples": [
+          {
+            "description": "[Example description]",
+            "compliant": "[Example of compliant content]",
+            "violation": "[Example of violating content]"
+          }
+        ]
+      }
+    ],
+    
+    // Rule Knowledge Graph Structure
+    "rules": [
+      {
+        "id": "[unique_identifier]",
+        "name": "[Rule Name]",
+        "description": "[Detailed description of the rule]",
+        "conditions": [
+          "[condition1]",
+          "[condition2]",
+          "[condition3]"
+        ],
+        "actions": [
+          "[action1]",
+          "[action2]",
+          "[action3]"
+        ],
+        "priority": "[high|medium|low]",
+        "confidence_threshold": 0.8,
+        "examples": [
+          {
+            "scenario": "[Scenario description]",
+            "triggered": true,
+            "action_taken": "[Action taken]"
+          }
+        ]
+      }
+    ]
+  },
+  "statistics": {
+    "total_entities": 0,
+    "total_relationships": 0,
+    "total_rules": 0,
+    "last_updated": "[YYYY-MM-DD]"
+  }
+} 

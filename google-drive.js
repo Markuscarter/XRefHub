@@ -337,3 +337,288 @@ export async function discoverXRefHubFolder() {
     return null;
   }
 } 
+
+/**
+ * Fetches structured knowledge graphs and policy documents with proper categorization.
+ * @param {string} category Optional category filter ('adReview', 'paidPartnership', 'knowledgeGraphs', 'all')
+ * @returns {Promise<object>} Object with categorized documents and knowledge graphs.
+ */
+export async function fetchStructuredDocuments(category = 'all') {
+  try {
+    const settings = await chrome.storage.local.get(['settings']);
+    const folderId = settings?.settings?.googleFolderId;
+    
+    if (!folderId) {
+      console.log('No Google Drive folder ID configured. Skipping structured documents fetch.');
+      return { policies: {}, knowledgeGraphs: {}, metadata: {} };
+    }
+
+    console.log(`[GoogleDrive] Fetching structured documents from folder: ${folderId} (category: ${category})`);
+
+    const token = await getAuthToken();
+    
+    // Fetch all documents in the folder
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,createdTime,modifiedTime)`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google Drive API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.files || data.files.length === 0) {
+      console.log(`No documents found in folder: ${folderId}`);
+      return { policies: {}, knowledgeGraphs: {}, metadata: {} };
+    }
+
+    console.log(`[GoogleDrive] Found ${data.files.length} documents`);
+
+    const structuredDocs = {
+      policies: {},
+      knowledgeGraphs: {},
+      metadata: {
+        adReview: [],
+        paidPartnership: [],
+        knowledgeGraphs: [],
+        general: []
+      }
+    };
+
+    // Process each document
+    for (const file of data.files) {
+      try {
+        const content = await getRuleFileContent(file.id);
+        if (!content) continue;
+
+        // Categorize based on filename and content
+        const category = categorizeDocument(file.name, content);
+        
+        if (category === 'knowledgeGraph') {
+          try {
+            // Try to parse as JSON knowledge graph
+            const graphData = JSON.parse(content);
+            structuredDocs.knowledgeGraphs[file.name] = {
+              content: graphData,
+              metadata: {
+                id: file.id,
+                name: file.name,
+                createdTime: file.createdTime,
+                modifiedTime: file.modifiedTime,
+                type: 'knowledgeGraph'
+              }
+            };
+            structuredDocs.metadata.knowledgeGraphs.push(file.name);
+          } catch (parseError) {
+            console.warn(`Failed to parse ${file.name} as JSON knowledge graph:`, parseError);
+            // Fall back to text content
+            structuredDocs.knowledgeGraphs[file.name] = {
+              content: content,
+              metadata: {
+                id: file.id,
+                name: file.name,
+                createdTime: file.createdTime,
+                modifiedTime: file.modifiedTime,
+                type: 'text'
+              }
+            };
+            structuredDocs.metadata.knowledgeGraphs.push(file.name);
+          }
+        } else {
+          // Policy document
+          structuredDocs.policies[file.name] = {
+            content: content,
+            category: category,
+            metadata: {
+              id: file.id,
+              name: file.name,
+              createdTime: file.createdTime,
+              modifiedTime: file.modifiedTime,
+              type: 'policy'
+            }
+          };
+          
+          // Add to appropriate category metadata
+          if (category === 'adReview') {
+            structuredDocs.metadata.adReview.push(file.name);
+          } else if (category === 'paidPartnership') {
+            structuredDocs.metadata.paidPartnership.push(file.name);
+          } else {
+            structuredDocs.metadata.general.push(file.name);
+          }
+        }
+        
+        console.log(`[GoogleDrive] Categorized ${file.name} as ${category}`);
+      } catch (error) {
+        console.error(`Error processing document ${file.name}:`, error);
+      }
+    }
+    
+    console.log(`[GoogleDrive] Successfully structured ${Object.keys(structuredDocs.policies).length} policies and ${Object.keys(structuredDocs.knowledgeGraphs).length} knowledge graphs`);
+    return structuredDocs;
+  } catch (error) {
+    console.error('Error fetching structured documents:', error);
+    return { policies: {}, knowledgeGraphs: {}, metadata: {} };
+  }
+}
+
+/**
+ * Categorizes a document based on its filename and content.
+ * @param {string} filename The document filename.
+ * @param {string} content The document content.
+ * @returns {string} The category ('adReview', 'paidPartnership', 'knowledgeGraph', 'general').
+ */
+function categorizeDocument(filename, content) {
+  const name = filename.toLowerCase();
+  const contentLower = content.toLowerCase();
+  
+  // Knowledge Graph indicators
+  if (name.includes('.json') || 
+      name.includes('knowledge') || 
+      name.includes('graph') || 
+      name.includes('kg_') ||
+      contentLower.includes('"nodes"') ||
+      contentLower.includes('"edges"') ||
+      contentLower.includes('"entities"') ||
+      contentLower.includes('"relationships"')) {
+    return 'knowledgeGraph';
+  }
+  
+  // Paid Partnership indicators
+  if (name.includes('paid') || 
+      name.includes('partnership') || 
+      name.includes('commercial') || 
+      name.includes('sponsored') ||
+      name.includes('advertising') ||
+      name.includes('promotion') ||
+      contentLower.includes('paid partnership') ||
+      contentLower.includes('commercial content') ||
+      contentLower.includes('sponsored post')) {
+    return 'paidPartnership';
+  }
+  
+  // Ad Review indicators
+  if (name.includes('ad_') || 
+      name.includes('review') || 
+      name.includes('content') || 
+      name.includes('policy') ||
+      name.includes('guidelines') ||
+      contentLower.includes('content policy') ||
+      contentLower.includes('community guidelines')) {
+    return 'adReview';
+  }
+  
+  // Default to general
+  return 'general';
+}
+
+/**
+ * Creates recommended folder structure in Google Drive.
+ * @returns {Promise<object>} Object with created folder IDs.
+ */
+export async function createRecommendedStructure() {
+  try {
+    const token = await getAuthToken();
+    const settings = await chrome.storage.local.get(['settings']);
+    const parentFolderId = settings?.settings?.googleFolderId;
+    
+    if (!parentFolderId) {
+      throw new Error('No parent folder ID configured');
+    }
+
+    const folders = {
+      policies: {
+        adReview: null,
+        paidPartnership: null,
+        general: null
+      },
+      knowledgeGraphs: {
+        entities: null,
+        relationships: null,
+        rules: null
+      },
+      templates: null,
+      examples: null
+    };
+
+    // Create policy subfolders
+    for (const [category, folderName] of Object.entries({
+      adReview: '01-Ad_Review_Policies',
+      paidPartnership: '02-Paid_Partnership_Policies', 
+      general: '03-General_Policies'
+    })) {
+      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentFolderId]
+        })
+      });
+
+      if (response.ok) {
+        const folderData = await response.json();
+        folders.policies[category] = folderData.id;
+        console.log(`Created ${folderName}: ${folderData.id}`);
+      }
+    }
+
+    // Create knowledge graph subfolders
+    for (const [category, folderName] of Object.entries({
+      entities: '04-Entity_Knowledge_Graphs',
+      relationships: '05-Relationship_Knowledge_Graphs',
+      rules: '06-Rule_Knowledge_Graphs'
+    })) {
+      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentFolderId]
+        })
+      });
+
+      if (response.ok) {
+        const folderData = await response.json();
+        folders.knowledgeGraphs[category] = folderData.id;
+        console.log(`Created ${folderName}: ${folderData.id}`);
+      }
+    }
+
+    // Create additional folders
+    for (const folderName of ['07-Templates', '08-Examples']) {
+      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentFolderId]
+        })
+      });
+
+      if (response.ok) {
+        const folderData = await response.json();
+        folders[folderName.split('-')[1].toLowerCase()] = folderData.id;
+        console.log(`Created ${folderName}: ${folderData.id}`);
+      }
+    }
+
+    console.log('[GoogleDrive] Created recommended folder structure');
+    return folders;
+  } catch (error) {
+    console.error('Error creating recommended structure:', error);
+    throw error;
+  }
+} 

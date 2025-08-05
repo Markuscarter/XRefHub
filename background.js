@@ -901,16 +901,21 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
     if (modePrompt && reviewMode === 'paidPartnership') {
         console.log('🎯 Using Paid Partnership mode analysis');
         
-        // Get structured policy documents for paid partnership
-        const policyDocuments = await fetchPolicyDocuments();
-        const paidPartnershipPolicies = Object.entries(policyDocuments)
-            .filter(([name, content]) => 
+        // Get structured policy documents and knowledge graphs for paid partnership
+        const structuredDocs = await fetchStructuredDocuments('paidPartnership');
+        const paidPartnershipPolicies = Object.entries(structuredDocs.policies)
+            .filter(([name, doc]) => doc.category === 'paidPartnership')
+            .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
+            .join('\n\n');
+        
+        // Add relevant knowledge graphs
+        const relevantKnowledgeGraphs = Object.entries(structuredDocs.knowledgeGraphs)
+            .filter(([name, graph]) => 
                 name.toLowerCase().includes('paid') || 
                 name.toLowerCase().includes('partnership') ||
-                name.toLowerCase().includes('commercial') ||
-                name.toLowerCase().includes('sponsored')
+                name.toLowerCase().includes('commercial')
             )
-            .map(([name, content]) => `<policy_document name="${name}">\n${content}\n</policy_document>`)
+            .map(([name, graph]) => `<knowledge_graph name="${name}">\n${JSON.stringify(graph.content, null, 2)}\n</knowledge_graph>`)
             .join('\n\n');
         
         const enhancedPrompt = `${modePrompt}
@@ -922,6 +927,9 @@ ${images.length > 0 ? `Images: ${images.length} found` : ''}
 
 PAID PARTNERSHIP POLICY DOCUMENTS:
 ${paidPartnershipPolicies}
+
+KNOWLEDGE GRAPHS:
+${relevantKnowledgeGraphs}
 
 SHEET LABELS:
 ${rules}
@@ -948,15 +956,21 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
     } else {
         console.log('📋 Using standard Ad Review mode analysis');
         
-        // Get structured policy documents for general content review
-        const policyDocuments = await fetchPolicyDocuments();
-        const generalPolicies = Object.entries(policyDocuments)
-            .filter(([name, content]) => 
+        // Get structured policy documents and knowledge graphs for general content review
+        const structuredDocs = await fetchStructuredDocuments('adReview');
+        const generalPolicies = Object.entries(structuredDocs.policies)
+            .filter(([name, doc]) => doc.category === 'adReview' || doc.category === 'general')
+            .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
+            .join('\n\n');
+        
+        // Add relevant knowledge graphs
+        const relevantKnowledgeGraphs = Object.entries(structuredDocs.knowledgeGraphs)
+            .filter(([name, graph]) => 
                 !name.toLowerCase().includes('paid') && 
                 !name.toLowerCase().includes('partnership') &&
                 !name.toLowerCase().includes('commercial')
             )
-            .map(([name, content]) => `<policy_document name="${name}">\n${content}\n</policy_document>`)
+            .map(([name, graph]) => `<knowledge_graph name="${name}">\n${JSON.stringify(graph.content, null, 2)}\n</knowledge_graph>`)
             .join('\n\n');
         
         const enhancedPrompt = `You are a Content Policy Analyst. Analyze this content focusing on:
@@ -979,6 +993,9 @@ ${images.length > 0 ? `Images: ${images.length} found` : ''}
 
 GENERAL POLICY DOCUMENTS:
 ${generalPolicies}
+
+KNOWLEDGE GRAPHS:
+${relevantKnowledgeGraphs}
 
 SHEET LABELS:
 ${rules}
