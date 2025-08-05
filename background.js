@@ -897,16 +897,41 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
         console.log('Drive rules not available, continuing with available rules:', error.message);
     }
     
-    // Use mode-specific prompt if provided, otherwise use standard analysis
+    // Enhanced mode-specific analysis with structured policy access
     if (modePrompt && reviewMode === 'paidPartnership') {
         console.log('🎯 Using Paid Partnership mode analysis');
+        
+        // Get structured policy documents for paid partnership
+        const policyDocuments = await fetchPolicyDocuments();
+        const paidPartnershipPolicies = Object.entries(policyDocuments)
+            .filter(([name, content]) => 
+                name.toLowerCase().includes('paid') || 
+                name.toLowerCase().includes('partnership') ||
+                name.toLowerCase().includes('commercial') ||
+                name.toLowerCase().includes('sponsored')
+            )
+            .map(([name, content]) => `<policy_document name="${name}">\n${content}\n</policy_document>`)
+            .join('\n\n');
+        
         const enhancedPrompt = `${modePrompt}
 
-Content to analyze: "${content}"
+CONTENT TO ANALYZE:
+"${content}"
 ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
 ${images.length > 0 ? `Images: ${images.length} found` : ''}
 
-Rules: ${rules}
+PAID PARTNERSHIP POLICY DOCUMENTS:
+${paidPartnershipPolicies}
+
+SHEET LABELS:
+${rules}
+
+ANALYSIS INSTRUCTIONS:
+1. First, review the PAID PARTNERSHIP POLICY DOCUMENTS above
+2. Identify which specific policy documents apply to this content
+3. Reference specific policy sections by name when making decisions
+4. Follow the step-by-step workflow for paid partnership compliance
+5. Use the SHEET LABELS as reference for final labeling
 
 Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning, workflowSteps, commissionDetected, promotionDetected, prohibitedIndustries, disclaimerPresent, violation, action, reasoning`;
 
@@ -914,15 +939,68 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
         return {
             ...analysis,
             reviewMode: 'paidPartnership',
-            modeUsed: 'paidPartnership'
+            modeUsed: 'paidPartnership',
+            policiesUsed: Object.keys(policyDocuments).filter(name => 
+                name.toLowerCase().includes('paid') || 
+                name.toLowerCase().includes('partnership')
+            )
         };
     } else {
         console.log('📋 Using standard Ad Review mode analysis');
-        const analysis = await analyzePost(content, mediaUrl, rules, images);
+        
+        // Get structured policy documents for general content review
+        const policyDocuments = await fetchPolicyDocuments();
+        const generalPolicies = Object.entries(policyDocuments)
+            .filter(([name, content]) => 
+                !name.toLowerCase().includes('paid') && 
+                !name.toLowerCase().includes('partnership') &&
+                !name.toLowerCase().includes('commercial')
+            )
+            .map(([name, content]) => `<policy_document name="${name}">\n${content}\n</policy_document>`)
+            .join('\n\n');
+        
+        const enhancedPrompt = `You are a Content Policy Analyst. Analyze this content focusing on:
+
+CONTENT ANALYSIS:
+- Identify the main intent and purpose of the post
+- Determine the target audience and messaging approach
+- Assess the tone, style, and communication strategy
+- Evaluate if content is promotional, informational, or entertainment
+
+POLICY COMPLIANCE:
+- Check for potential policy violations (inappropriate content, misleading claims, etc.)
+- Assess accuracy and truthfulness of claims
+- Evaluate potential harm or risk to users
+
+CONTENT TO ANALYZE:
+"${content}"
+${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
+${images.length > 0 ? `Images: ${images.length} found` : ''}
+
+GENERAL POLICY DOCUMENTS:
+${generalPolicies}
+
+SHEET LABELS:
+${rules}
+
+ANALYSIS INSTRUCTIONS:
+1. First, review the GENERAL POLICY DOCUMENTS above
+2. Identify which specific policy documents apply to this content
+3. Reference specific policy sections by name when making decisions
+4. Focus on content intent and general policy compliance
+5. Use the SHEET LABELS as reference for final labeling
+
+Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning`;
+
+        const analysis = await analyzePost(content, mediaUrl, enhancedPrompt, images);
         return {
             ...analysis,
             reviewMode: 'adReview',
-            modeUsed: 'adReview'
+            modeUsed: 'adReview',
+            policiesUsed: Object.keys(policyDocuments).filter(name => 
+                !name.toLowerCase().includes('paid') && 
+                !name.toLowerCase().includes('partnership')
+            )
         };
     }
 }
@@ -996,26 +1074,41 @@ async function getDeeperAnalysis(content, mediaUrl) {
         console.log('Drive rules not available for deeper analysis, continuing with available rules:', error.message);
     }
     
-    // Enhanced prompt for deeper analysis with web research
+    // Enhanced prompt for deeper analysis with structured policy access
+    const policyDocuments = await fetchPolicyDocuments();
+    const structuredPolicies = Object.entries(policyDocuments)
+        .map(([name, content]) => `<policy_document name="${name}">\n${content}\n</policy_document>`)
+        .join('\n\n');
+    
     const enhancedPrompt = `You are an Expert Content Policy Analyst conducting a comprehensive "tell me why" analysis. 
 
 CONTENT TO ANALYZE:
 "${content}"
 ${mediaUrl ? `Media URL: ${mediaUrl}` : ''}
 
-POLICY DOCUMENTS:
+STRUCTURED POLICY DOCUMENTS:
+${structuredPolicies}
+
+SHEET LABELS:
 ${rules}
 
 DEEPER ANALYSIS REQUIREMENTS:
 1. **WHY** - Explain the reasoning behind the policy assessment
-2. **REAL DATA** - Reference specific policy sections, industry standards, and enforcement precedents
+2. **REAL DATA** - Reference specific policy sections by name, industry standards, and enforcement precedents
 3. **WEB SOURCES** - Include relevant external sources, case studies, and industry examples
 4. **CONTEXT** - Consider the broader social media landscape and platform-specific policies
 5. **IMPACT** - Assess potential user impact and platform risk
 
+ANALYSIS INSTRUCTIONS:
+1. First, review the STRUCTURED POLICY DOCUMENTS above
+2. Identify which specific policy documents apply to this content
+3. Reference specific policy sections by name when making decisions
+4. Quote relevant policy text when explaining reasoning
+5. Provide detailed "tell me why" explanations with policy citations
+
 Provide a comprehensive analysis that includes:
-- Detailed reasoning for policy decisions
-- Specific policy citations and references
+- Detailed reasoning for policy decisions with specific policy references
+- Specific policy citations and references by document name
 - Industry context and precedents
 - Risk assessment and impact analysis
 - Recommendations for content creators and platform enforcement
