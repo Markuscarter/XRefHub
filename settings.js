@@ -220,7 +220,6 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
 
     const updateGoogleStatus = (status, message) => {
         googleSigninButton.style.display = 'none';
-        googleSignoutButton.style.display = 'none';
         saveButton.disabled = false; // Always enable save button
         loadFromDriveButton.disabled = !chrome.runtime.getManifest().oauth2; // Disable only if OAuth disabled
 
@@ -228,7 +227,6 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
             case 'connected':
                 googleStatusIcon.textContent = '✅';
                 googleStatusText.textContent = message || 'Connected to Google';
-                googleSignoutButton.style.display = 'block';
                 loadFromDriveButton.disabled = false;
                 checkAllConnections(); // Check other services when Google is connected
                 break;
@@ -244,13 +242,25 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
             case 'error':
                 googleStatusIcon.textContent = '❌';
                 googleStatusText.textContent = message || 'Connection Failed';
-                googleSigninButton.style.display = 'block';
+                if (message && message.includes('OAuth')) {
+                    googleSigninButton.style.display = 'none'; // Don't show sign-in if OAuth disabled
+                } else {
+                    googleSigninButton.style.display = 'block';
+                }
                 break;
         }
     };
-    
+
     const checkGoogleConnection = async () => {
         updateGoogleStatus('loading', 'Checking connection...');
+        
+        // Check if OAuth is configured
+        if (!chrome.runtime.getManifest().oauth2) {
+            updateGoogleStatus('error', 'OAuth is disabled. Google integration unavailable.');
+            console.log('[Xrefhub Settings] OAuth is not configured in manifest.json');
+            return;
+        }
+        
         try {
             const token = await chrome.identity.getAuthToken({ interactive: false });
             if (!token) throw new Error("Not signed in.");
@@ -264,6 +274,8 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
             if (error.message.includes('bad client id')) {
                 updateGoogleStatus('error', 'OAuth configuration issue. Please check the instructions.');
                 console.error('OAuth Client ID Error: The client ID in manifest.json needs to be updated. See oauth-fix-instructions.md for details.');
+            } else if (error.message.includes('OAuth is not configured')) {
+                updateGoogleStatus('error', 'OAuth is disabled. Google integration unavailable.');
             } else {
                 updateGoogleStatus('disconnected');
             }
@@ -277,26 +289,39 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
             }
         }, 2000);
     };
-    
+
     const handleGoogleSignIn = async () => {
-        console.log('[Xrefhub Settings] Starting enhanced Google sign-in with OAuth fix...');
+        console.log('[Xrefhub Settings] Starting Google sign-in...');
         
+        // Check if OAuth is configured
+        if (!chrome.runtime.getManifest().oauth2) {
+            updateGoogleStatus('error', 'OAuth is disabled. Please enable OAuth in manifest.json first.');
+            console.log('[Xrefhub Settings] Cannot sign in - OAuth is not configured');
+            return;
+        }
+        
+        animateButton(googleSigninButton, 'loading');
+        updateGoogleStatus('loading', 'Please follow the sign-in prompt...');
         try {
-            // Use the new OAuth fix if available
-            if (typeof SettingsOAuthFix !== 'undefined') {
-                const oauthFix = new SettingsOAuthFix();
-                await oauthFix.handleGoogleSignIn();
-            } else {
-                // Fallback to original method if OAuth fix is not loaded
-                console.log('[Xrefhub Settings] OAuth fix not loaded, using fallback method...');
-                await handleGoogleSignInFallback();
-            }
-            
-            // Refresh connection status after sign-in attempt
-            await checkAllConnections();
+            console.log('[Xrefhub Settings] Requesting auth token...');
+            const token = await getAuthToken();
+            console.log('[Xrefhub Settings] Auth token received, fetching profile...');
+            const profile = await fetchGoogleUserProfile();
+            console.log('[Xrefhub Settings] Profile received:', profile);
+            updateGoogleStatus('connected', `Connected as ${profile.name}`);
+            animateButton(googleSigninButton, 'success');
         } catch (error) {
-            console.error('[Xrefhub Settings] Sign-in failed:', error);
-            updateGoogleStatus('error', `Sign-in failed: ${error.message}`);
+            console.error('Explicit sign-in failed:', error);
+            
+            // Provide specific guidance for OAuth client ID errors
+            if (error.message.includes('bad client id')) {
+                updateGoogleStatus('error', 'OAuth configuration issue. Please check the instructions.');
+                console.error('OAuth Client ID Error: The client ID in manifest.json needs to be updated. See oauth-fix-instructions.md for details.');
+            } else if (error.message.includes('OAuth is not configured')) {
+                updateGoogleStatus('error', 'OAuth is disabled. Please enable OAuth in manifest.json first.');
+            } else {
+                updateGoogleStatus('error', 'Sign-in failed. Please try again.');
+            }
         }
     };
 
@@ -626,10 +651,9 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
         try {
             const settings = {
                 provider: selectedProvider,
-                        username: usernameInput.value.trim(),
-        geminiApiKey: geminiApiKeyInput.value.trim(),
-        chatgptApiKey: chatgptApiKeyInput.value.trim(),
-                grockToken: await getGrockToken(),
+                username: usernameInput.value.trim(),
+                chatgptApiKey: chatgptApiKeyInput.value.trim(),
+                groqApiKey: groqApiKeyInput.value.trim(),
                 googleSheetId: googleSheetIdInput.value.trim(),
                 googleFolderId: googleFolderIdInput.value.trim(),
             };
@@ -637,7 +661,7 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
             // Validate required fields
             const errors = [];
             if (!settings.username) errors.push('Username is required');
-            if (!settings.geminiApiKey && !settings.chatgptApiKey) {
+            if (!settings.chatgptApiKey && !settings.groqApiKey) {
                 errors.push('At least one AI API key is required');
             }
 
@@ -689,8 +713,13 @@ const chatgptApiKeyInput = document.getElementById('chatgpt-api-key');
     });
 
     // Auto-save on input changes
-            [usernameInput, geminiApiKeyInput, chatgptApiKeyInput, googleSheetIdInput, googleFolderIdInput].forEach(input => {
-        input.addEventListener('input', autoSave);
+    [usernameInput, chatgptApiKeyInput, groqApiKeyInput, googleSheetIdInput, googleFolderIdInput].forEach(input => {
+        input.addEventListener('input', () => {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                saveSettings(true); // true = silent save
+            }, 1000); // Save after 1 second of inactivity
+        });
     });
 
     // --- Initializers ---
