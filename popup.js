@@ -5,7 +5,7 @@
 
 // Check if we're in a popup context
 if (typeof window !== 'undefined') {
-    document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
         console.log('[Xrefhub Popup] Initializing enhanced popup...');
     
     // --- Element Selectors ---
@@ -62,7 +62,7 @@ if (typeof window !== 'undefined') {
                     action: 'scanPage', 
                     tabId: currentTab.id 
                 }),
-                new Promise((_, reject) => 
+                    new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Scan timeout after 30 seconds')), 30000)
                 )
             ]);
@@ -128,8 +128,8 @@ if (typeof window !== 'undefined') {
         // Priority 3: Review context content
         else if (scanData.reviewContext && Object.keys(scanData.reviewContext).length > 0) {
             const reviewContent = Object.values(scanData.reviewContext)
-                .map(r => r?.content || '')
-                .filter(content => content.length > 0)
+                        .map(r => r?.content || '')
+                        .filter(content => content.length > 0)
                 .join('\n\n');
             
             if (reviewContent.length > 50) {
@@ -151,8 +151,8 @@ if (typeof window !== 'undefined') {
             const formContent = Object.values(scanData.formData)
                 .map(input => input?.value || '')
                 .filter(value => value && value.length > 5)
-                .join('\n');
-            
+                        .join('\n');
+                    
             if (formContent.length > 20) {
                 bestContent = formContent;
                 contentSource = 'formData';
@@ -201,8 +201,8 @@ if (typeof window !== 'undefined') {
                 if (content.length > 20) {
                     console.log('[Xrefhub Popup] Auto-triggering analysis...');
                     setTimeout(() => triggerAnalysis(), 500);
-                }
-            } else {
+                    }
+                } else {
                 // No good content found
                 postContent.value = 'Could not automatically extract content from this page. Please paste content manually.';
                 console.log('[Xrefhub Popup] ⚠️ No suitable content found for auto-analysis');
@@ -261,16 +261,16 @@ if (typeof window !== 'undefined') {
             });
 
             // Perform AI analysis
-            const analysisResponse = await Promise.race([
-                chrome.runtime.sendMessage({
-                    action: 'analyze',
-                    content: postContent.value,
+                            const analysisResponse = await Promise.race([
+                                chrome.runtime.sendMessage({
+                                    action: 'analyze',
+                                    content: postContent.value,
                     mediaUrl: scanData?.landingUrl || '',
                     images: scanData?.images || [],
                     reviewMode: reviewMode,
                     modePrompt: modeConfig ? modeConfig.aiPrompt : null
-                }),
-                new Promise((_, reject) => 
+                                }),
+                                new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
                 )
             ]);
@@ -280,8 +280,8 @@ if (typeof window !== 'undefined') {
             if (analysisResponse && analysisResponse.error) {
                 throw new Error(analysisResponse.error);
             }
-
-            if (analysisResponse) {
+                            
+                            if (analysisResponse) {
                 // Combine AI analysis with industry detection
                 const enhancedResponse = {
                     ...analysisResponse,
@@ -301,7 +301,7 @@ if (typeof window !== 'undefined') {
 
                 handleAnalysisResponse(enhancedResponse);
                 showToast('Enhanced analysis completed successfully', 'success');
-            } else {
+                            } else {
                 throw new Error('No response from analysis');
             }
 
@@ -309,9 +309,9 @@ if (typeof window !== 'undefined') {
             console.error('[Xrefhub Popup] Enhanced analysis failed:', error);
             handleError(error, 'Enhanced content analysis failed');
             showToast(`Enhanced analysis failed: ${error.message}`, 'error');
-        } finally {
-            setLoadingState(false);
-        }
+                        } finally {
+                            setLoadingState(false);
+                        }
     }
 
     // --- URL Analysis Trigger ---

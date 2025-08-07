@@ -15,23 +15,23 @@ async function enhancedContentScan() {
     console.log('[Xrefhub Scanner] Page title:', document.title);
     console.log('[Xrefhub Scanner] Document ready state:', document.readyState);
 
-            const result = {
-            postId: 'Not found',
-            adText: 'Not found',
-            landingUrl: 'Not found',
-            pageUrl: window.location.href,
-            extractedAt: new Date().toLocaleString(),
-            reviewContext: {},
-            formData: {},
-            statusIndicators: {},
-            tableData: {},
-            uiElements: {},
+    const result = {
+        postId: 'Not found',
+        adText: 'Not found',
+        landingUrl: 'Not found',
+        pageUrl: window.location.href,
+        extractedAt: new Date().toLocaleString(),
+        reviewContext: {},
+        formData: {},
+        statusIndicators: {},
+        tableData: {},
+        uiElements: {},
             metadata: {},
             images: [],
             arsLabels: [],
             iframeContent: [],
             mediaUrls: []
-        };
+    };
 
     try {
         // Safe text extraction helper
@@ -59,7 +59,7 @@ async function enhancedContentScan() {
                 console.log('[Xrefhub Scanner] Found tweet text:', text.substring(0, 100) + '...');
                 
                 // Look for links in the tweet
-                const linkElement = tweetTextElement.querySelector('a');
+            const linkElement = tweetTextElement.querySelector('a');
                 if (linkElement && linkElement.href) {
                     result.landingUrl = linkElement.href;
                 }
@@ -219,7 +219,7 @@ async function enhancedContentScan() {
         
         for (const selector of mediaSelectors) {
             try {
-                const elements = document.querySelectorAll(selector);
+            const elements = document.querySelectorAll(selector);
                 elements.forEach(element => {
                     const url = element.src || element.href;
                     if (url && url.length > 0) {
@@ -341,13 +341,13 @@ async function enhancedContentScan() {
         // --- Metadata ---
         console.log('[Xrefhub Scanner] Creating metadata...');
         try {
-            result.metadata = {
-                title: document.title || 'No title',
-                url: window.location.href,
-                userAgent: navigator.userAgent.substring(0, 100) + '...',
-                timestamp: Date.now(),
-                domain: window.location.hostname,
-                totalElements: document.querySelectorAll('*').length,
+        result.metadata = {
+            title: document.title || 'No title',
+            url: window.location.href,
+            userAgent: navigator.userAgent.substring(0, 100) + '...',
+            timestamp: Date.now(),
+            domain: window.location.hostname,
+            totalElements: document.querySelectorAll('*').length,
                 bodyText: document.body && typeof document.body.innerText === 'string' ? 
                     document.body.innerText.substring(0, 500) + '...' : 'No body'
             };

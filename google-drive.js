@@ -525,6 +525,277 @@ export async function fetchStructuredDocuments(category = 'all') {
 }
 
 /**
+ * Enhanced document fetching with semantic search capabilities
+ * @param {string} query - Search query for semantic search
+ * @param {string} category - Document category filter
+ * @param {number} limit - Maximum number of documents to return
+ * @param {boolean} useSemanticSearch - Whether to use semantic search
+ * @returns {Promise<object>} Structured documents with relevance scores
+ */
+export async function fetchStructuredDocumentsEnhanced(query = null, category = 'all', limit = 10, useSemanticSearch = true) {
+  try {
+    const settings = await chrome.storage.local.get(['settings']);
+    const folderId = settings?.settings?.googleFolderId;
+    
+    if (!folderId) {
+      console.log('No Google Drive folder ID configured. Skipping structured documents fetch.');
+      return { policies: {}, knowledgeGraphs: {}, metadata: {} };
+    }
+
+    console.log(`[GoogleDrive] Fetching structured documents with ${useSemanticSearch ? 'semantic' : 'folder-based'} search`);
+
+    // If semantic search is enabled and we have a query, use vector search
+    if (useSemanticSearch && query) {
+      return await fetchDocumentsWithSemanticSearch(query, category, limit);
+    }
+
+    // Fall back to folder-based search
+    return await fetchStructuredDocuments(category);
+  } catch (error) {
+    console.error('Error in enhanced document fetching:', error);
+    // Fall back to original method
+    return await fetchStructuredDocuments(category);
+  }
+}
+
+/**
+ * Fetch documents using semantic search
+ */
+async function fetchDocumentsWithSemanticSearch(query, category = 'all', limit = 10) {
+  try {
+    // Import vector search engine
+    const { getVectorSearchEngine, fetchRelevantDocuments } = await import('./vector-search.js');
+    const engine = getVectorSearchEngine();
+    
+    console.log(`[GoogleDrive] Performing semantic search for: "${query}"`);
+    
+    // Check if vector search is initialized
+    const stats = engine.getStats();
+    if (stats.indexedDocuments === 0) {
+      console.log('[GoogleDrive] Vector search not initialized, initializing now...');
+      await initializeVectorSearch();
+    }
+    
+    // Perform semantic search
+    const relevantDocs = await engine.searchSimilar(query, limit, category);
+    
+    // Fetch full document content
+    const documents = await fetchDocumentsByIds(relevantDocs.map(d => d.id));
+    
+    // Structure results similar to original format
+    const structuredDocs = {
+      policies: {},
+      knowledgeGraphs: {},
+      vectorChunks: {},
+      enforcementWorkflows: {},
+      masterConsolidated: {},
+      metadata: {
+        adReview: [],
+        paidPartnership: [],
+        knowledgeGraphs: [],
+        vectorChunks: [],
+        enforcementWorkflows: [],
+        general: []
+      },
+      searchResults: {
+        query: query,
+        totalFound: relevantDocs.length,
+        relevanceScores: relevantDocs.map(d => ({
+          id: d.id,
+          score: d.similarity,
+          metadata: d.metadata
+        }))
+      }
+    };
+    
+    // Categorize documents based on their content and metadata
+    for (const doc of documents) {
+      const category = doc.metadata?.category || 'general';
+      const relevanceScore = relevantDocs.find(r => r.id === doc.id)?.similarity || 0;
+      
+      if (category === 'policy' || doc.metadata?.folder === '01_Policy_Documents') {
+        structuredDocs.policies[doc.metadata?.name || doc.id] = {
+          content: doc.content,
+          category: categorizeDocument(doc.metadata?.name || '', doc.content),
+          metadata: { ...doc.metadata, relevanceScore },
+          relevanceScore
+        };
+      } else if (category === 'knowledgeGraph' || doc.metadata?.folder === '04_Knowledge_Graphs') {
+        structuredDocs.knowledgeGraphs[doc.metadata?.name || doc.id] = {
+          content: doc.content,
+          metadata: { ...doc.metadata, relevanceScore },
+          relevanceScore
+        };
+      } else if (category === 'vectorChunk' || doc.metadata?.folder === '03_Vector_Chunks') {
+        structuredDocs.vectorChunks[doc.metadata?.name || doc.id] = {
+          content: doc.content,
+          metadata: { ...doc.metadata, relevanceScore },
+          relevanceScore
+        };
+      } else if (category === 'enforcementWorkflow' || doc.metadata?.folder === '05_Enforcement_Workflows') {
+        structuredDocs.enforcementWorkflows[doc.metadata?.name || doc.id] = {
+          content: doc.content,
+          metadata: { ...doc.metadata, relevanceScore },
+          relevanceScore
+        };
+      } else if (category === 'masterConsolidated' || doc.metadata?.folder === '06_Master_Consolidated') {
+        structuredDocs.masterConsolidated[doc.metadata?.name || doc.id] = {
+          content: doc.content,
+          metadata: { ...doc.metadata, relevanceScore },
+          relevanceScore
+        };
+      }
+    }
+    
+    console.log(`[GoogleDrive] Semantic search completed. Found ${relevantDocs.length} relevant documents`);
+    return structuredDocs;
+    
+  } catch (error) {
+    console.error('Error in semantic search:', error);
+    // Fall back to folder-based search
+    return await fetchStructuredDocuments(category);
+  }
+}
+
+/**
+ * Fetch documents by IDs from Google Drive
+ */
+async function fetchDocumentsByIds(documentIds) {
+  const documents = [];
+  const token = await getAuthToken();
+  
+  for (const docId of documentIds) {
+    try {
+      const content = await getRuleFileContent(docId);
+      if (content) {
+        // Get file metadata
+        const metadataResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${docId}?fields=id,name,mimeType,createdTime,modifiedTime,parents`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (metadataResponse.ok) {
+          const metadata = await metadataResponse.json();
+          documents.push({
+            id: docId,
+            content: content,
+            metadata: {
+              name: metadata.name,
+              mimeType: metadata.mimeType,
+              createdTime: metadata.createdTime,
+              modifiedTime: metadata.modifiedTime,
+              folder: await getFolderName(metadata.parents?.[0], token)
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch document ${docId}:`, error);
+    }
+  }
+  
+  return documents;
+}
+
+/**
+ * Get folder name by ID
+ */
+async function getFolderName(folderId, token) {
+  if (!folderId) return null;
+  
+  try {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=name`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.name;
+    }
+  } catch (error) {
+    console.warn('Failed to get folder name:', error);
+  }
+  
+  return null;
+}
+
+/**
+ * Initialize vector search with existing documents
+ */
+async function initializeVectorSearch() {
+  try {
+    // Import vector search engine
+    const { getVectorSearchEngine } = await import('./vector-search.js');
+    const engine = getVectorSearchEngine();
+    
+    // Fetch all existing documents using the original method
+    const allDocs = await fetchStructuredDocuments('all');
+    
+    // Convert to the format expected by vector search
+    const documents = [];
+    
+    // Add policies
+    for (const [name, doc] of Object.entries(allDocs.policies)) {
+      documents.push({
+        id: doc.metadata?.id || name,
+        content: doc.content,
+        metadata: doc.metadata,
+        category: doc.category || 'policy'
+      });
+    }
+    
+    // Add knowledge graphs
+    for (const [name, doc] of Object.entries(allDocs.knowledgeGraphs)) {
+      documents.push({
+        id: doc.metadata?.id || name,
+        content: typeof doc.content === 'string' ? doc.content : JSON.stringify(doc.content),
+        metadata: doc.metadata,
+        category: 'knowledgeGraph'
+      });
+    }
+    
+    // Add vector chunks
+    for (const [name, doc] of Object.entries(allDocs.vectorChunks)) {
+      documents.push({
+        id: doc.metadata?.id || name,
+        content: doc.content,
+        metadata: doc.metadata,
+        category: 'vectorChunk'
+      });
+    }
+    
+    // Add enforcement workflows
+    for (const [name, doc] of Object.entries(allDocs.enforcementWorkflows)) {
+      documents.push({
+        id: doc.metadata?.id || name,
+        content: doc.content,
+        metadata: doc.metadata,
+        category: 'enforcementWorkflow'
+      });
+    }
+    
+    // Add master consolidated
+    for (const [name, doc] of Object.entries(allDocs.masterConsolidated)) {
+      documents.push({
+        id: doc.metadata?.id || name,
+        content: typeof doc.content === 'string' ? doc.content : JSON.stringify(doc.content),
+        metadata: doc.metadata,
+        category: 'masterConsolidated'
+      });
+    }
+    
+    // Index all documents
+    const results = await engine.batchIndexDocuments(documents);
+    
+    console.log(`[GoogleDrive] Vector search initialized with ${results.length} documents`);
+    return results;
+    
+  } catch (error) {
+    console.error('Error initializing vector search:', error);
+    return [];
+  }
+}
+
+/**
  * Categorizes a document based on its filename and content.
  * @param {string} filename The document filename.
  * @param {string} content The document content.

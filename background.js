@@ -649,7 +649,7 @@ async function scanPage(tabId) {
                                 console.log('[Xrefhub Scanner] Found tweet text:', text.substring(0, 100) + '...');
                                 
                                 // Look for links in the tweet
-                                const linkElement = tweetTextElement.querySelector('a');
+                            const linkElement = tweetTextElement.querySelector('a');
                                 if (linkElement && linkElement.href) {
                                     result.landingUrl = linkElement.href;
                                 }
@@ -658,7 +658,7 @@ async function scanPage(tabId) {
 
                         // If no tweet content, try general content selectors
                         if (result.adText === 'Not found') {
-                            const contentSelectors = [
+                        const contentSelectors = [
                                 'article',
                                 '[data-testid*="text"]',
                                 '.post-content',
@@ -727,8 +727,8 @@ async function scanPage(tabId) {
                         // --- Status Indicators (simplified) ---
                         console.log('[Xrefhub Scanner] Looking for status indicators...');
                         try {
-                            const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
-                            statusElements.forEach((el, index) => {
+                        const statusElements = document.querySelectorAll('[class*="status"], [class*="label"], [class*="badge"], [class*="tag"]');
+                        statusElements.forEach((el, index) => {
                                 try {
                                     const text = safeGetText(el);
                                     if (text && text.length < 100) {
@@ -771,13 +771,13 @@ async function scanPage(tabId) {
                         // --- Metadata ---
                         console.log('[Xrefhub Scanner] Creating metadata...');
                         try {
-                            result.metadata = {
-                                title: document.title || 'No title',
-                                url: window.location.href,
+                        result.metadata = {
+                            title: document.title || 'No title',
+                            url: window.location.href,
                                 userAgent: navigator.userAgent.substring(0, 100) + '...',
-                                timestamp: Date.now(),
-                                domain: window.location.hostname,
-                                totalElements: document.querySelectorAll('*').length,
+                            timestamp: Date.now(),
+                            domain: window.location.hostname,
+                            totalElements: document.querySelectorAll('*').length,
                                 bodyText: document.body && typeof document.body.innerText === 'string' ? 
                                     document.body.innerText.substring(0, 500) + '...' : 'No body'
                             };
@@ -876,7 +876,7 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
     
     // Try to get rules from Google Sheet first
     try {
-        const labelsData = await getLabelsFromSheet();
+    const labelsData = await getLabelsFromSheet();
         rules = labelsData.map(label => `- ${label.name}`).join('\n');
         console.log('Using sheet rules for analysis');
     } catch (error) {
@@ -1123,7 +1123,7 @@ async function getDeeperAnalysis(content, mediaUrl) {
     
     // Try to get rules from Google Sheet first
     try {
-        const labelsData = await getLabelsFromSheet();
+    const labelsData = await getLabelsFromSheet();
         rules = labelsData.map(label => `- ${label.name}`).join('\n');
         console.log('Using sheet rules for deeper analysis');
     } catch (error) {
