@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xrefhub Design System - TSL Ultra Dashboard</title>
+    <style>
+        /* Design System Implementation - TSL Ultra Theme */
+        
+        /* CSS Custom Properties from design.json */
+        :root {
+            /* Primary Colors */
+            --primary-gradient-start: #667eea;
+            --primary-gradient-end: #764ba2;
+            --primary-solid: #667eea;
+            --primary-light: rgba(102, 126, 234, 0.1);
+            
+            /* Background Colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #f0f2f5;
+            --bg-card: #ffffff;
+            
+            /* Text Colors */
+            --text-primary: #333333;
+            --text-secondary: #495057;
+            --text-muted: #6b7280;
+            --text-light: #606770;
+            --text-on-primary: #ffffff;
+            
+            /* Border Colors */
+            --border-light: #e9ecef;
+            --border-medium: #dddfe2;
+            --border-focus: #667eea;
+            
+            /* Status Colors */
+            --success-main: #28a745;
+            --success-bg: #f0fdf4;
+            --success-light: #d4edda;
+            --success-text: #155724;
+            
+            --error-main: #dc3545;
+            --error-bg: #fef2f2;
+            --error-light: #f8d7da;
+            --error-text: #721c24;
+            
+            --warning-main: #ffc107;
+            --warning-bg: #fff3cd;
+            --warning-light: #ffeaa7;
+            --warning-text: #856404;
+            
+            --info-main: #17a2b8;
+            --info-bg: #f0f9ff;
+            --info-light: #b8e6ff;
+            --info-text: #0c5460;
+            
+            /* Spacing Scale */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 12px;
+            --spacing-base: 16px;
+            --spacing-lg: 20px;
+            --spacing-xl: 24px;
+            --spacing-xxl: 32px;
+            --spacing-xxxl: 48px;
+            
+            /* Border Radius */
+            --radius-sm: 4px;
+            --radius-base: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 20px;
+            --radius-full: 50%;
+            
+            /* Shadows */
+            --shadow-card: 0 2px 12px rgba(0,0,0,0.08);
+            --shadow-card-hover: 0 4px 20px rgba(0,0,0,0.12);
+            --shadow-button: 0 4px 12px rgba(102, 126, 234, 0.4);
+            --shadow-focus: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            --shadow-toast: 0 4px 12px rgba(0,0,0,0.15);
+            
+            /* Typography */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            --font-mono: 'Courier New', monospace;
+            
+            /* Font Sizes */
+            --font-xs: 10px;
+            --font-sm: 12px;
+            --font-base: 14px;
+            --font-md: 16px;
+            --font-lg: 18px;
+            --font-xl: 20px;
+            --font-xxl: 24px;
+            --font-xxxl: 32px;
+            --font-huge: 48px;
+            
+            /* Transitions */
+            --transition-fast: 0.2s ease;
+            --transition-normal: 0.3s ease;
+            --transition-slow: 0.6s ease;
+        }
+        
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-base);
+            line-height: 1.5;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Dashboard Container */
+        .dashboard-container {
+            min-height: 100vh;
+            padding: var(--spacing-xl);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+        
+        /* Header */
+        .dashboard-header {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            box-shadow: var(--shadow-card);
+            margin-bottom: var(--spacing-xl);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-base);
+        }
+        
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-on-primary);
+            font-size: var(--font-xl);
+            font-weight: 600;
+            box-shadow: var(--shadow-card);
+        }
+        
+        .brand-text h1 {
+            font-size: var(--font-xxxl);
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .brand-text .subtitle {
+            font-size: var(--font-md);
+            color: var(--text-muted);
+            margin-top: var(--spacing-xs);
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+        
+        /* Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            box-shadow: var(--shadow-card);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-card-hover);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .card-title {
+            font-size: var(--font-lg);
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .card-icon {
+            width: 24px;
+            height: 24px;
+            background: var(--primary-light);
+            border-radius: var(--radius-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-solid);
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: var(--font-base);
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-normal);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            color: var(--text-on-primary);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-button);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-light);
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--border-light);
+            transform: translateY(-1px);
+        }
+        
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+        
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-lg);
+            font-size: var(--font-sm);
+            font-weight: 500;
+        }
+        
+        .status-connected {
+            background: var(--success-light);
+            color: var(--success-text);
+        }
+        
+        .status-error {
+            background: var(--error-light);
+            color: var(--error-text);
+        }
+        
+        .status-warning {
+            background: var(--warning-light);
+            color: var(--warning-text);
+        }
+        
+        .status-loading {
+            background: var(--warning-light);
+            color: var(--warning-text);
+        }
+        
+        /* Metrics */
+        .metric {
+            text-align: center;
+            padding: var(--spacing-lg);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+        
+        .metric-value {
+            font-size: var(--font-huge);
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+        
+        .metric-label {
+            font-size: var(--font-sm);
+            color: var(--text-muted);
+            margin-top: var(--spacing-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Progress Bars */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            margin: var(--spacing-md) 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            border-radius: var(--radius-sm);
+            transition: width var(--transition-normal);
+        }
+        
+        /* Form Elements */
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+            color: var(--text-secondary);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: var(--spacing-md) var(--spacing-base);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            font-size: var(--font-base);
+            background: var(--bg-secondary);
+            transition: var(--transition-normal);
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--border-focus);
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-focus);
+        }
+        
+        /* Lists */
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md) 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            background: var(--success-main);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: var(--font-sm);
+            flex-shrink: 0;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--spacing-base);
+            margin: var(--spacing-lg) 0;
+        }
+        
+        /* Activity Feed */
+        .activity-item {
+            display: flex;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md) 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-text {
+            font-size: var(--font-base);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .activity-time {
+            font-size: var(--font-sm);
+            color: var(--text-muted);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: var(--spacing-base);
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-lg);
+            }
+            
+            .dashboard-header {
+                flex-direction: column;
+                gap: var(--spacing-lg);
+                text-align: center;
+            }
+            
+            .header-actions {
+                justify-content: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-medium);
+            border-radius: var(--radius-sm);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        /* Focus Styles for Accessibility */
+        .btn:focus-visible,
+        .form-input:focus-visible {
+            outline: 2px solid var(--border-focus);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header fade-in-up">
+            <div class="header-brand">
+                <div class="brand-icon">X</div>
+                <div class="brand-text">
+                    <h1>Xrefhub Design System</h1>
+                    <p class="subtitle">TSL Ultra Dashboard Template</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" title="Notifications">🔔</button>
+                <button class="btn-icon" title="Settings">⚙️</button>
+                <button class="btn btn-primary">Get Started</button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Overview Card -->
+            <div class="card fade-in-up" style="animation-delay: 0.1s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">📊</span>
+                        System Overview
+                    </h2>
+                    <span class="status-indicator status-connected">
+                        ● Online
+                    </span>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="metric">
+                        <div class="metric-value">98</div>
+                        <div class="metric-label">Uptime %</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">1.2K</div>
+                        <div class="metric-label">Analyses</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">45</div>
+                        <div class="metric-label">Active Users</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">3.4s</div>
+                        <div class="metric-label">Avg Response</div>
+                    </div>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 85%;"></div>
+                </div>
+                <p style="text-align: center; margin-top: 8px; color: var(--text-muted); font-size: var(--font-sm);">
+                    System Performance: 85%
+                </p>
+            </div>
+
+            <!-- Features Card -->
+            <div class="card fade-in-up" style="animation-delay: 0.2s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">✨</span>
+                        Design Features
+                    </h2>
+                </div>
+                
+                <ul class="feature-list">
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Comprehensive Color Palette</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Typography System</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Component Library</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Responsive Patterns</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Accessibility First</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✓</span>
+                        <span>Theme Support</span>
+                    </li>
+                </ul>
+                
+                <button class="btn btn-primary" style="width: 100%; margin-top: var(--spacing-lg);">
+                    View Documentation
+                </button>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card fade-in-up" style="animation-delay: 0.3s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">🔗</span>
+                        Connection Status
+                    </h2>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Google Drive API</span>
+                        <span class="status-indicator status-connected">Connected</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Google Sheets API</span>
+                        <span class="status-indicator status-connected">Connected</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Gemini AI</span>
+                        <span class="status-indicator status-connected">Connected</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>OpenAI API</span>
+                        <span class="status-indicator status-warning">Limited</span>
+                    </div>
+                </div>
+                
+                <button class="btn btn-secondary" style="width: 100%; margin-top: var(--spacing-lg);">
+                    Manage Connections
+                </button>
+            </div>
+
+            <!-- Activity Feed -->
+            <div class="card fade-in-up" style="animation-delay: 0.4s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">📋</span>
+                        Recent Activity
+                    </h2>
+                </div>
+                
+                <div>
+                    <div class="activity-item">
+                        <div class="activity-avatar">AI</div>
+                        <div class="activity-content">
+                            <div class="activity-text">Content analysis completed</div>
+                            <div class="activity-time">2 minutes ago</div>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-avatar">U</div>
+                        <div class="activity-content">
+                            <div class="activity-text">User settings updated</div>
+                            <div class="activity-time">5 minutes ago</div>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-avatar">S</div>
+                        <div class="activity-content">
+                            <div class="activity-text">Sheet export successful</div>
+                            <div class="activity-time">12 minutes ago</div>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-avatar">⚡</div>
+                        <div class="activity-content">
+                            <div class="activity-text">System performance optimized</div>
+                            <div class="activity-time">1 hour ago</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Preview -->
+            <div class="card fade-in-up" style="animation-delay: 0.5s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">⚙️</span>
+                        Quick Settings
+                    </h2>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">AI Provider</label>
+                    <select class="form-input">
+                        <option>Gemini Pro</option>
+                        <option>ChatGPT</option>
+                        <option>Claude</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Analysis Mode</label>
+                    <select class="form-input">
+                        <option>Standard Review</option>
+                        <option>Policy Check</option>
+                        <option>Risk Assessment</option>
+                        <option>Execution Mode</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: var(--spacing-md);">
+                    <button class="btn btn-secondary" style="flex: 1;">Reset</button>
+                    <button class="btn btn-primary" style="flex: 1;">Save</button>
+                </div>
+            </div>
+
+            <!-- Color Palette Demo -->
+            <div class="card fade-in-up" style="animation-delay: 0.6s;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">🎨</span>
+                        Color Palette
+                    </h2>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-md); margin-bottom: var(--spacing-lg);">
+                    <div style="height: 60px; background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: var(--font-sm);">Primary</div>
+                    <div style="height: 60px; background: var(--success-main); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: var(--font-sm);">Success</div>
+                    <div style="height: 60px; background: var(--warning-main); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: var(--warning-text); font-weight: 600; font-size: var(--font-sm);">Warning</div>
+                    <div style="height: 60px; background: var(--error-main); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: var(--font-sm);">Error</div>
+                </div>
+                
+                <p style="color: var(--text-muted); font-size: var(--font-sm); text-align: center;">
+                    Accessible color system with semantic meaning
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">
+            <p>Built with ❤️ using the Xrefhub Design System</p>
+            <p style="margin-top: var(--spacing-sm); font-size: var(--font-sm);">
+                TSL Ultra Dashboard Template • Design System v1.0.0
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Demo interactions
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate progress bars on load
+            const progressBars = document.querySelectorAll('.progress-fill');
+            progressBars.forEach(bar => {
+                const width = bar.style.width;
+                bar.style.width = '0%';
+                setTimeout(() => {
+                    bar.style.width = width;
+                }, 500);
+            });
+
+            // Add pulse effect to metrics
+            const metrics = document.querySelectorAll('.metric-value');
+            metrics.forEach(metric => {
+                metric.addEventListener('mouseenter', function() {
+                    this.classList.add('pulse');
+                });
+                metric.addEventListener('mouseleave', function() {
+                    this.classList.remove('pulse');
+                });
+            });
+
+            // Button click effects
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    // Create ripple effect
+                    const ripple = document.createElement('span');
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.height, rect.width);
+                    const x = e.clientX - rect.left - size / 2;
+                    const y = e.clientY - rect.top - size / 2;
+                    
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    ripple.style.position = 'absolute';
+                    ripple.style.borderRadius = '50%';
+                    ripple.style.background = 'rgba(255, 255, 255, 0.5)';
+                    ripple.style.transform = 'scale(0)';
+                    ripple.style.animation = 'ripple 0.6s linear';
+                    ripple.style.pointerEvents = 'none';
+                    
+                    this.appendChild(ripple);
+                    
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                });
+            });
+
+            // Add CSS for ripple animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes ripple {
+                    to {
+                        transform: scale(4);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        });
+    </script>
+</body>
+</html>

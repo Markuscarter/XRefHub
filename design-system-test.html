@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Design System Connection Test</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body {
+            padding: 20px;
+            font-family: var(--font-family);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+        }
+        .test-section h2 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+        }
+        .color-test {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .color-swatch {
+            height: 60px;
+            border-radius: var(--radius-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: var(--font-sm);
+        }
+        .success { background: var(--success-main); }
+        .error { background: var(--error-main); }
+        .warning { background: var(--warning-main); color: var(--warning-text); }
+        .primary { background: linear-gradient(135deg, var(--primary-gradient-start) 0%, var(--primary-gradient-end) 100%); }
+        .secondary { background: var(--secondary-main); }
+        
+        .connection-status {
+            padding: 15px;
+            border-radius: var(--radius-md);
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        .connected {
+            background: var(--success-light);
+            color: var(--success-text);
+            border: 1px solid var(--success-main);
+        }
+        .test-results {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Design System Connection Test</h1>
+    <p>This page tests the connection between popup.css and design.json</p>
+
+    <div class="test-section">
+        <h2>✅ Connection Status</h2>
+        <div class="connection-status connected">
+            🟢 SUCCESS: CSS Custom Properties are working!
+        </div>
+        <p>If you can see the colors and styling correctly, your popup.css is now connected to the design system.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🎨 Color Palette Test</h2>
+        <div class="color-test">
+            <div class="color-swatch primary">Primary Gradient</div>
+            <div class="color-swatch success">Success</div>
+            <div class="color-swatch error">Error</div>
+            <div class="color-swatch warning">Warning</div>
+            <div class="color-swatch secondary">Secondary</div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧩 Component Test</h2>
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <button class="btn btn-primary">Primary Button</button>
+            <button class="btn btn-secondary">Secondary Button</button>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <input type="text" placeholder="Test input field" style="width: 200px; margin-right: 10px;">
+            <span class="status-indicator status-connected">Connected</span>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📐 Spacing & Typography Test</h2>
+        <div class="card">
+            <h3 class="card-header">Test Card Header</h3>
+            <p>This card uses design system spacing (--spacing-xl for padding) and typography (--font-md for header).</p>
+            <div class="readonly-field" style="margin-top: 15px;">
+                This readonly field uses design system background and border colors.
+            </div>
+        </div>
+    </div>
+
+    <div class="test-results">
+        <h3>🔍 CSS Variables Test Results</h3>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+            <li><strong>Primary Colors:</strong> <span id="primary-test">Testing...</span></li>
+            <li><strong>Background Colors:</strong> <span id="bg-test">Testing...</span></li>
+            <li><strong>Text Colors:</strong> <span id="text-test">Testing...</span></li>
+            <li><strong>Status Colors:</strong> <span id="status-test">Testing...</span></li>
+            <li><strong>Spacing System:</strong> <span id="spacing-test">Testing...</span></li>
+        </ul>
+    </div>
+
+    <script>
+        // Test if CSS variables are working
+        function testCSSVariables() {
+            const root = document.documentElement;
+            const computedStyle = getComputedStyle(root);
+            
+            // Test primary colors
+            const primaryStart = computedStyle.getPropertyValue('--primary-gradient-start').trim();
+            document.getElementById('primary-test').textContent = 
+                primaryStart === '#667eea' ? '✅ Working' : '❌ Failed';
+            
+            // Test background colors
+            const bgSecondary = computedStyle.getPropertyValue('--bg-secondary').trim();
+            document.getElementById('bg-test').textContent = 
+                bgSecondary === '#f8f9fa' ? '✅ Working' : '❌ Failed';
+            
+            // Test text colors
+            const textPrimary = computedStyle.getPropertyValue('--text-primary').trim();
+            document.getElementById('text-test').textContent = 
+                textPrimary === '#333333' ? '✅ Working' : '❌ Failed';
+            
+            // Test status colors
+            const successMain = computedStyle.getPropertyValue('--success-main').trim();
+            document.getElementById('status-test').textContent = 
+                successMain === '#28a745' ? '✅ Working' : '❌ Failed';
+            
+            // Test spacing
+            const spacingXl = computedStyle.getPropertyValue('--spacing-xl').trim();
+            document.getElementById('spacing-test').textContent = 
+                spacingXl === '24px' ? '✅ Working' : '❌ Failed';
+        }
+        
+        // Run tests when page loads
+        document.addEventListener('DOMContentLoaded', testCSSVariables);
+    </script>
+</body>
+</html>
