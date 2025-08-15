@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Xrefhub",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "An advanced AI assistant for content analysis and review.",
     "permissions": [
         "storage",
