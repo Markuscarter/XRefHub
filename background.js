@@ -1,6 +1,124 @@
 // Import AI analyzer functions - using script injection instead of dynamic imports
 let analyzePost, getChatReply, getDeeperAnalysisFromAI, getNBMResponse;
-let fetchAllRules, fetchImagesFromDrive;
+let fetchAllRules, fetchImagesFromDrive, fetchStructuredDocuments;
+
+// Add fallback function for fetchStructuredDocuments
+async function fetchStructuredDocumentsWithFallback(category = 'all') {
+    try {
+        console.log(`[Fallback System] Attempting to fetch structured documents for category: ${category}`);
+        
+        // Try to import and use the structured system
+        try {
+            const { fetchStructuredDocuments } = await import('./google-drive.js');
+            const structuredDocs = await fetchStructuredDocuments(category);
+            
+            if (structuredDocs && structuredDocs.policies && Object.keys(structuredDocs.policies).length > 0) {
+                console.log('[Fallback System] ✅ Structured system working');
+                return structuredDocs;
+            } else {
+                throw new Error('Structured system returned empty data');
+            }
+        } catch (error) {
+            console.log('[Fallback System] ⚠️ Structured system failed, using classic backup:', error.message);
+            
+            // Fall back to classic approach using fetchAllRules
+            const allRules = await fetchAllRules();
+            
+            if (!allRules || allRules.trim().length === 0) {
+                console.log('[Fallback System] ⚠️ No rules found, using emergency fallback');
+                return createEmergencyFallback();
+            }
+            
+            // Convert classic rules to structured format
+            return convertClassicRulesToStructure(allRules, category);
+        }
+        
+    } catch (error) {
+        console.error('[Fallback System] ❌ All methods failed:', error.message);
+        return createEmergencyFallback();
+    }
+}
+
+// Convert classic rules to structured format
+function convertClassicRulesToStructure(allRules, category) {
+    try {
+        const structure = {
+            policies: {},
+            knowledgeGraphs: {},
+            vectorChunks: {},
+            enforcementWorkflows: {},
+            masterConsolidated: {},
+            metadata: { adReview: [], paidPartnership: [], general: [] }
+        };
+        
+        // Parse policy documents from classic format
+        const policyBlocks = allRules.split('<policy_document name="');
+        
+        for (let i = 1; i < policyBlocks.length; i++) {
+            const block = policyBlocks[i];
+            const nameEnd = block.indexOf('">');
+            const contentEnd = block.indexOf('</policy_document>');
+            
+            if (nameEnd !== -1 && contentEnd !== -1) {
+                const name = block.substring(0, nameEnd);
+                const content = block.substring(nameEnd + 2, contentEnd);
+                
+                // Determine category
+                let docCategory = 'general';
+                if (name.toLowerCase().includes('paid') || name.toLowerCase().includes('partnership')) {
+                    docCategory = 'paidPartnership';
+                } else if (name.toLowerCase().includes('ad') || name.toLowerCase().includes('review')) {
+                    docCategory = 'adReview';
+                }
+                
+                // Add to structure if category matches
+                if (category === 'all' || docCategory === category || docCategory === 'general') {
+                    structure.policies[name] = {
+                        content: content,
+                        category: docCategory,
+                        source: 'classic_converted'
+                    };
+                    
+                    if (!structure.metadata[docCategory]) {
+                        structure.metadata[docCategory] = [];
+                    }
+                    structure.metadata[docCategory].push(name);
+                }
+            }
+        }
+        
+        console.log(`[Fallback System] ✅ Converted ${Object.keys(structure.policies).length} policies from classic format`);
+        return structure;
+        
+    } catch (error) {
+        console.error('[Fallback System] ❌ Error converting classic rules:', error.message);
+        return createEmergencyFallback();
+    }
+}
+
+// Create emergency fallback structure
+function createEmergencyFallback() {
+    console.log('[Fallback System] 🚨 Creating emergency fallback structure');
+    
+    return {
+        policies: {
+            'Emergency_Content_Policy': {
+                content: 'Basic content moderation: Review for inappropriate content, verify accuracy, assess tone and context.',
+                category: 'general',
+                source: 'emergency_fallback'
+            }
+        },
+        knowledgeGraphs: {},
+        vectorChunks: {},
+        enforcementWorkflows: {},
+        masterConsolidated: {},
+        metadata: {
+            adReview: ['Emergency_Content_Policy'],
+            paidPartnership: [],
+            general: ['Emergency_Content_Policy']
+        }
+    };
+}
 
 // Load modules using a CSP-compatible approach
 async function loadModules() {
@@ -480,11 +598,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.log('✅ Page scan completed, content length:', contentLength);
                 sendResponse({ content });
             } else if (request.action === 'analyze') {
-                console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
-                console.log('📝 Content preview:', request.content?.substring(0, 100) + '...');
-                console.log('🖼️ Images to analyze:', request.images?.length || 0);
-                console.log('🎯 Review mode:', request.reviewMode || 'adReview');
-                console.log('📋 Mode prompt available:', !!request.modePrompt);
+    console.log('🤖 Starting analysis for content length:', request.content?.length || 0);
+    
+    // Fix: Add content type validation before using substring
+    if (typeof request.content === 'string') {
+        console.log('📝 Content preview:', request.content.substring(0, 100) + '...');
+    } else {
+        console.log('📝 Content preview: [Content is not a string]', typeof request.content);
+        // Convert to string if possible
+        request.content = String(request.content || '');
+    }
+    
+    console.log('🖼️ Images to analyze:', request.images?.length || 0);
+    console.log('🎯 Review mode:', request.reviewMode || 'adReview');
+    console.log('📋 Mode prompt available:', !!request.modePrompt);
                 
                 const analysis = await handleAnalysis(request.content, request.mediaUrl, request.images, request.reviewMode, request.modePrompt);
                 console.log('✅ Analysis completed:', {
@@ -902,7 +1029,7 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
         console.log('🎯 Using Paid Partnership mode analysis');
         
         // Get structured policy documents and knowledge graphs for paid partnership
-        const structuredDocs = await fetchStructuredDocuments('paidPartnership');
+        const structuredDocs = await fetchStructuredDocumentsWithFallback('paidPartnership');
         const paidPartnershipPolicies = Object.entries(structuredDocs.policies)
             .filter(([name, doc]) => doc.category === 'paidPartnership')
             .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
@@ -937,7 +1064,12 @@ export async function handleAnalysis(content, mediaUrl, images = [], reviewMode 
             .map(([name, data]) => `<master_consolidated name="${name}">\n${JSON.stringify(data.content, null, 2)}\n</master_consolidated>`)
             .join('\n\n');
         
-        const enhancedPrompt = `${modePrompt}
+        const enhancedPrompt = `You are a SPECIALIZED PAID PARTNERSHIP POLICY ANALYST. Your expertise is in identifying commercial relationships, sponsored content, and paid promotional activities.
+
+REVIEW MODE: PAID PARTNERSHIP ANALYSIS
+FOCUS: Commercial relationships, sponsored content, paid promotions, affiliate marketing
+
+⚠️ CRITICAL REQUIREMENT: You MUST maintain a 70% minimum confidence threshold for ALL label suggestions. If you cannot meet this threshold, do not suggest labels.
 
 CONTENT TO ANALYZE:
 "${content}"
@@ -959,22 +1091,95 @@ ${masterData}
 SHEET LABELS:
 ${rules}
 
-ANALYSIS INSTRUCTIONS:
-1. First, review the PAID PARTNERSHIP POLICY DOCUMENTS above
-2. Use the KNOWLEDGE GRAPHS to identify patterns and relationships
-3. Follow the ENFORCEMENT WORKFLOWS for step-by-step compliance checking
-4. Reference MASTER CONSOLIDATED DATA for comprehensive policy coverage
-5. Reference specific policy sections by name when making decisions
-6. Use the SHEET LABELS as reference for final labeling
+MANDATORY ANALYSIS PROCESS (MUST FOLLOW STEP-BY-STEP):
 
-Return a JSON object with: summary, resolution, suggestedLabels, policyDocument, policyReasoning, workflowSteps, commissionDetected, promotionDetected, prohibitedIndustries, disclaimerPresent, violation, action, reasoning`;
+1. **POLICY DOCUMENT REVIEW** (REQUIRED - 15% of analysis time):
+   - Thoroughly read and understand ALL provided policy documents
+   - Identify specific policy sections that apply to this content
+   - Note exact policy language and requirements
+
+2. **EVIDENCE GATHERING** (REQUIRED - 25% of analysis time):
+   - Collect specific evidence from the content
+   - Match evidence against policy requirements
+   - Document exact matches and discrepancies
+
+3. **POLICY MAPPING** (REQUIRED - 20% of analysis time):
+   - Map content elements to specific policy sections
+   - Identify which policies are violated or complied with
+   - Calculate compliance percentage for each policy area
+
+4. **CONFIDENCE CALCULATION** (REQUIRED - 20% of analysis time):
+   - Evidence strength: How strong is the evidence? (0-100%)
+   - Policy clarity: How clear is the policy language? (0-100%)
+   - Match accuracy: How well does content match policy? (0-100%)
+   - Overall confidence = (Evidence + Policy + Match) / 3
+
+5. **LABEL DECISION** (REQUIRED - 20% of analysis time):
+   - ONLY suggest labels if confidence ≥ 70%
+   - If confidence < 70%, explain why labels cannot be suggested
+   - Provide specific policy citations for all decisions
+
+CONFIDENCE THRESHOLD ENFORCEMENT:
+
+🟢 **HIGH CONFIDENCE (90-100%)**: 
+- Strong evidence, clear policy match, multiple confirming indicators
+- REQUIRED: Suggest specific labels with detailed reasoning
+
+🟡 **MEDIUM CONFIDENCE (70-89%)**: 
+- Good evidence, clear policy match, some confirming indicators
+- REQUIRED: Suggest labels but note any uncertainties
+
+🚨 **LOW CONFIDENCE (Below 70%)**: 
+- Weak evidence, unclear policy match, conflicting indicators
+- REQUIRED: NO LABELS SUGGESTED - explain why confidence is insufficient
+
+EVIDENCE REQUIREMENTS:
+- Must reference specific policy sections by name
+- Must provide exact content quotes that support decisions
+- Must explain how content matches or violates policies
+- Must identify any conflicting evidence or uncertainties
+
+QUALITY CONTROL CHECKLIST:
+□ Policy documents thoroughly reviewed
+□ Evidence collected and documented
+□ Policy mapping completed
+□ Confidence calculated with specific metrics
+□ Decision meets 70% threshold requirement
+□ Specific policy citations provided
+□ Uncertainties clearly identified
+
+Return a JSON object with: 
+{
+  "summary": "Brief content overview",
+  "resolution": "Overall assessment",
+  "suggestedLabels": "ONLY if confidence ≥ 70%, otherwise empty array",
+  "policyDocument": "Specific policy names referenced",
+  "policyReasoning": "Detailed policy analysis",
+  "workflowSteps": "Analysis steps followed",
+  "commissionDetected": "Boolean with evidence",
+  "promotionDetected": "Boolean with evidence", 
+  "prohibitedIndustries": "Array with evidence",
+  "disclaimerPresent": "Boolean with evidence",
+  "violation": "Boolean with evidence",
+  "action": "Recommended action",
+  "reasoning": "Detailed reasoning",
+  "confidenceLevel": "Exact percentage (0-100)",
+  "confidenceBreakdown": {
+    "evidenceStrength": "0-100%",
+    "policyClarity": "0-100%", 
+    "matchAccuracy": "0-100%"
+  },
+  "specificEvidence": "Exact quotes and policy references",
+  "qualityControl": "Quality control checklist results",
+  "insufficientConfidence": "Explanation if confidence < 70%"
+}`;
 
         const analysis = await analyzePost(content, mediaUrl, enhancedPrompt, images);
         return {
             ...analysis,
             reviewMode: 'paidPartnership',
             modeUsed: 'paidPartnership',
-            policiesUsed: Object.keys(policyDocuments).filter(name => 
+            policiesUsed: Object.keys(structuredDocs.policies).filter(name => 
                 name.toLowerCase().includes('paid') || 
                 name.toLowerCase().includes('partnership')
             )
@@ -983,7 +1188,7 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
         console.log('📋 Using standard Ad Review mode analysis');
         
         // Get structured policy documents and knowledge graphs for general content review
-        const structuredDocs = await fetchStructuredDocuments('adReview');
+        const structuredDocs = await fetchStructuredDocumentsWithFallback('adReview');
         const generalPolicies = Object.entries(structuredDocs.policies)
             .filter(([name, doc]) => doc.category === 'adReview' || doc.category === 'general')
             .map(([name, doc]) => `<policy_document name="${name}">\n${doc.content}\n</policy_document>`)
@@ -1067,7 +1272,7 @@ Return a JSON object with: summary, resolution, suggestedLabels, policyDocument,
             ...analysis,
             reviewMode: 'adReview',
             modeUsed: 'adReview',
-            policiesUsed: Object.keys(policyDocuments).filter(name => 
+            policiesUsed: Object.keys(structuredDocs.policies).filter(name => 
                 !name.toLowerCase().includes('paid') && 
                 !name.toLowerCase().includes('partnership')
             )

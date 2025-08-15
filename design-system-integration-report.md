@@ -231,3 +231,4 @@ Your popup.css is now:
 *Integration completed on: $(date)*  
 *Design System Version: 1.0.0*  
 *Extension Version: 2.0.0*
+

@@ -347,6 +347,35 @@ function generateBuildReport(results) {
     }
 }
 
+function syncDesignSystem() {
+    logSection('Design System Sync');
+    
+    try {
+        // Check if sync-design.js exists
+        const syncScriptPath = 'sync-design.js';
+        if (!fs.existsSync(syncScriptPath)) {
+            logWarning('sync-design.js not found - skipping design sync');
+            return true;
+        }
+        
+        // Import and run the sync script
+        const { syncDesignSystem: syncDesign } = require('./sync-design.js');
+        const success = syncDesign();
+        
+        if (success) {
+            logSuccess('Design system synced successfully');
+        } else {
+            logWarning('Design system sync had issues - check manually');
+        }
+        
+        return success;
+        
+    } catch (error) {
+        logError(`Design system sync failed: ${error.message}`);
+        return false;
+    }
+}
+
 // Main build function
 async function build() {
     log(`${colors.bright}${colors.magenta}🚀 Xrefhub Chrome Extension Build v${config.version}${colors.reset}\n`);
@@ -425,6 +454,9 @@ async function build() {
     
     // 8. Validate AI integration
     results.aiIntegration = checkAIIntegration();
+    
+    // 9. Sync design system
+    results.designSync = syncDesignSystem();
     
     // Generate final report
     const buildSuccess = generateBuildReport(results);

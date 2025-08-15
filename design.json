@@ -28,16 +28,16 @@
   },
   "color_palette": {
     "primary": {
-      "gradient_start": "#667eea",
-      "gradient_end": "#764ba2",
-      "solid": "#667eea",
-      "light": "rgba(102, 126, 234, 0.1)",
-      "description": "Primary purple-blue gradient for headers and primary actions"
+      "gradient_start": "#1a1a1a",
+      "gradient_end": "#2d2d2d",
+      "solid": "#1a1a1a",
+      "light": "rgba(26, 26, 26, 0.1)",
+      "description": "Primary black gradient for headers and primary actions"
     },
     "secondary": {
-      "main": "#6c757d",
-      "hover": "#5a6268",
-      "description": "Gray for secondary buttons and less prominent elements"
+      "main": "#f5f5f7",
+      "hover": "#e8e8ed",
+      "description": "Light gray for secondary buttons and less prominent elements"
     },
     "background": {
       "primary": "#ffffff",
@@ -47,43 +47,43 @@
       "description": "Clean white and light gray backgrounds"
     },
     "text": {
-      "primary": "#333333",
-      "secondary": "#495057",
+      "primary": "#1d1d1f",
+      "secondary": "#86868b",
       "muted": "#6b7280",
-      "light": "#606770",
+      "light": "#a1a1a6",
       "on_primary": "#ffffff",
       "description": "Text colors for different hierarchies and contexts"
     },
     "border": {
-      "light": "#e9ecef",
-      "medium": "#dddfe2",
-      "focus": "#667eea",
+      "light": "#e5e5e7",
+      "medium": "#d2d2d7",
+      "focus": "#1a1a1a",
       "description": "Border colors for inputs, cards, and dividers"
     },
     "status": {
       "success": {
-        "main": "#28a745",
+        "main": "#30d158",
         "background": "#f0fdf4",
         "light": "#d4edda",
-        "text": "#155724"
+        "text": "#1b5e20"
       },
       "error": {
-        "main": "#dc3545",
+        "main": "#ff3b30",
         "background": "#fef2f2",
         "light": "#f8d7da",
-        "text": "#721c24"
+        "text": "#b71c1c"
       },
       "warning": {
-        "main": "#ffc107",
+        "main": "#ff9500",
         "background": "#fff3cd",
         "light": "#ffeaa7",
-        "text": "#856404"
+        "text": "#e65100"
       },
       "info": {
-        "main": "#17a2b8",
+        "main": "#007aff",
         "background": "#f0f9ff",
         "light": "#b8e6ff",
-        "text": "#0c5460"
+        "text": "#0d47a1"
       }
     },
     "industry_detection": {
@@ -106,9 +106,9 @@
   },
   "typography": {
     "font_family": {
-      "primary": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
-      "monospace": "'Courier New', monospace",
-      "description": "System font stack for cross-platform consistency"
+      "primary": "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+      "monospace": "'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace",
+      "description": "System font stack with Apple's SF Pro for modern look"
     },
     "font_sizes": {
       "xs": "10px",
@@ -191,20 +191,21 @@
     }
   },
   "border_radius": {
-    "sm": "4px",
-    "base": "6px",
-    "md": "8px",
-    "lg": "12px",
-    "xl": "20px",
+    "sm": "6px",
+    "base": "8px",
+    "md": "12px",
+    "lg": "16px",
+    "xl": "24px",
     "full": "50%",
     "description": "Consistent border radius for different component sizes"
   },
   "shadows": {
-    "card": "0 2px 12px rgba(0,0,0,0.08)",
-    "card_hover": "0 4px 20px rgba(0,0,0,0.12)",
-    "button": "0 4px 12px rgba(102, 126, 234, 0.4)",
-    "focus": "0 0 0 3px rgba(102, 126, 234, 0.1)",
-    "toast": "0 4px 12px rgba(0,0,0,0.15)",
+    "card": "0 4px 20px rgba(0,0,0,0.06)",
+    "card_hover": "0 8px 32px rgba(0,0,0,0.12)",
+    "button": "0 4px 16px rgba(26, 26, 26, 0.3)",
+    "button_hover": "0 6px 24px rgba(26, 26, 26, 0.4)",
+    "focus": "0 0 0 3px rgba(26, 26, 26, 0.15)",
+    "toast": "0 4px 20px rgba(0,0,0,0.15)",
     "description": "Consistent shadow system for depth and interactivity"
   },
   "layout": {
@@ -230,39 +231,42 @@
   "components": {
     "buttons": {
       "primary": {
-        "background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        "background": "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)",
         "color": "#ffffff",
         "border": "none",
-        "border_radius": "8px",
-        "padding": "12px 20px",
+        "border_radius": "12px",
+        "padding": "12px 24px",
         "font_size": "14px",
-        "font_weight": "500",
+        "font_weight": "600",
+        "hover_background": "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%)",
         "hover_transform": "translateY(-2px)",
-        "hover_shadow": "0 4px 12px rgba(102, 126, 234, 0.4)",
-        "transition": "all 0.3s ease"
+        "hover_shadow": "0 6px 24px rgba(26, 26, 26, 0.4)",
+        "active_transform": "translateY(0px)",
+        "transition": "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
       },
       "secondary": {
-        "background": "#6c757d",
-        "color": "#ffffff",
-        "border": "none",
-        "border_radius": "8px",
-        "padding": "12px 20px",
+        "background": "#f5f5f7",
+        "color": "#1d1d1f",
+        "border": "1px solid #e5e5e7",
+        "border_radius": "12px",
+        "padding": "12px 24px",
         "font_size": "14px",
         "font_weight": "500",
-        "hover_background": "#5a6268",
+        "hover_background": "#e8e8ed",
+        "hover_border": "#d2d2d7",
         "hover_transform": "translateY(-1px)",
-        "transition": "all 0.3s ease"
+        "transition": "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
       },
       "icon": {
-        "background": "rgba(255,255,255,0.2)",
-        "color": "#ffffff",
-        "border": "none",
-        "border_radius": "6px",
-        "padding": "8px",
+        "background": "rgba(245,245,247,0.8)",
+        "color": "#1d1d1f",
+        "border": "1px solid rgba(229,229,231,0.6)",
+        "border_radius": "10px",
+        "padding": "10px",
         "font_size": "16px",
-        "hover_background": "rgba(255,255,255,0.3)",
+        "hover_background": "rgba(232,232,237,0.9)",
         "hover_transform": "translateY(-1px)",
-        "transition": "all 0.2s ease"
+        "transition": "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
       },
       "states": {
         "loading": {
@@ -275,7 +279,7 @@
           "cursor": "not-allowed"
         },
         "success": {
-          "background": "#22c55e",
+          "background": "linear-gradient(135deg, #30d158 0%, #34c759 100%)",
           "animation": "pulse-success 0.6s ease"
         }
       }
@@ -296,7 +300,7 @@
         "font_weight": "600",
         "color": "#2c3e50",
         "margin_bottom": "16px",
-        "accent_border": "4px height, linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        "accent_border": "4px height, linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)"
       }
     },
     "forms": {
@@ -306,9 +310,9 @@
         "border_radius": "8px",
         "font_size": "14px",
         "background": "#f8f9fa",
-        "focus_border": "#667eea",
+        "focus_border": "#1a1a1a",
         "focus_background": "#ffffff",
-        "focus_shadow": "0 0 0 3px rgba(102, 126, 234, 0.1)",
+        "focus_shadow": "0 0 0 3px rgba(26, 26, 26, 0.15)",
         "transition": "all 0.3s ease"
       },
       "textarea": {
@@ -355,9 +359,9 @@
         "background": "#f8f9fa"
       },
       "message_user": {
-        "background": "#667eea",
+        "background": "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
         "color": "#ffffff",
-        "border_radius": "12px 12px 4px 12px",
+        "border_radius": "18px 18px 6px 18px",
         "align_self": "flex-end",
         "max_width": "80%"
       },
@@ -365,12 +369,12 @@
         "background": "#ffffff",
         "color": "#333333",
         "border": "1px solid #e9ecef",
-        "border_radius": "12px 12px 12px 4px",
+        "border_radius": "18px 18px 18px 6px",
         "align_self": "flex-start",
         "max_width": "80%"
       },
       "input": {
-        "border_radius": "20px",
+        "border_radius": "24px",
         "background": "#f8f9fa",
         "focus_background": "#ffffff"
       }
@@ -389,14 +393,14 @@
         "animation": "slideIn 0.3s ease-out"
       },
       "success": {
-        "background": "#28a745"
+        "background": "linear-gradient(135deg, #30d158 0%, #34c759 100%)"
       },
       "error": {
-        "background": "#dc3545"
+        "background": "linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%)"
       },
       "warning": {
-        "background": "#ffc107",
-        "color": "#212529"
+        "background": "linear-gradient(135deg, #ff9500 0%, #ffb347 100%)",
+        "color": "#1d1d1f"
       }
     },
     "labels": {
@@ -458,7 +462,7 @@
   },
   "accessibility": {
     "focus_styles": {
-      "outline": "2px solid #667eea",
+              "outline": "2px solid #1a1a1a",
       "outline_offset": "2px"
     },
     "color_contrast": {
@@ -485,11 +489,11 @@
   },
   "scrollbar_styling": {
     "width": "6px",
-    "track_background": "#f1f1f1",
+    "track_background": "#f5f5f7",
     "track_border_radius": "3px",
-    "thumb_background": "#c1c1c1",
+    "thumb_background": "#d2d2d7",
     "thumb_border_radius": "3px",
-    "thumb_hover": "#a8a8a8"
+    "thumb_hover": "#a1a1a6"
   },
   "print_styles": {
     "hidden_elements": [".btn", ".chat-container", ".toast"],
@@ -500,7 +504,7 @@
   },
   "themes": {
     "light": {
-      "description": "Default light theme",
+      "description": "Default light theme with black gradient buttons",
       "status": "active"
     },
     "dark": {
@@ -514,8 +518,10 @@
       "Apply hover effects to interactive elements",
       "Use semantic color names for status indicators",
       "Maintain consistent border radius across similar components",
-      "Use the primary gradient for main actions",
-      "Apply appropriate focus styles for accessibility"
+      "Use the black gradient for primary actions",
+      "Apply appropriate focus styles for accessibility",
+      "Use subtle shadows and modern rounded corners",
+      "Implement smooth cubic-bezier transitions"
     ],
     "dont": [
       "Use hardcoded colors outside the palette",
@@ -523,7 +529,8 @@
       "Create inconsistent hover states",
       "Override accessibility focus styles without replacement",
       "Use overly bright colors for large areas",
-      "Create custom shadows without following the system"
+      "Create custom shadows without following the system",
+      "Use harsh transitions or sudden color changes"
     ]
   },
   "file_locations": {
@@ -542,3 +549,4 @@
     }
   }
 }
+

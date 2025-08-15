@@ -29,3 +29,22 @@ yarn-error.log*
 client_secret.json
 .env
 xrefhub_config.json 
+
+# Logs
+logs
+dev-debug.log
+# Dependency directories
+node_modules/
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+tasks.json
+tasks/ 

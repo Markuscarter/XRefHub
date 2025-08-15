@@ -1406,3 +1406,40 @@ function initializeReviewModeSelector() {
         console.error('[Xrefhub Popup] Review mode selector error:', error);
     }
 } 
+
+// Add confidence threshold validation
+function validateLabelSuggestions(analysis) {
+    if (analysis.confidenceLevel < 70) {
+        console.warn(`[Confidence Check] Analysis confidence ${analysis.confidenceLevel}% is below 70% threshold`);
+        
+        // Show warning to user
+        showConfidenceWarning(analysis.confidenceLevel, analysis.insufficientConfidence);
+        
+        // Clear any low-confidence labels
+        analysis.suggestedLabels = [];
+        
+        return false;
+    }
+    
+    console.log(`[Confidence Check] Analysis confidence ${analysis.confidenceLevel}% meets 70% threshold`);
+    return true;
+}
+
+function showConfidenceWarning(confidence, reason) {
+    const warningDiv = document.createElement('div');
+    warningDiv.className = 'confidence-warning';
+    warningDiv.innerHTML = `
+        <div class="warning-header">
+            <span class="warning-icon">⚠️</span>
+            <strong>Low Confidence Analysis</strong>
+        </div>
+        <div class="warning-content">
+            <p>Analysis confidence: <strong>${confidence}%</strong> (below 70% threshold)</p>
+            <p><strong>Reason:</strong> ${reason}</p>
+            <p>No labels suggested due to insufficient confidence. Please review content manually.</p>
+        </div>
+    `;
+    
+    // Add to your results display
+    document.getElementById('analysis-results').prepend(warningDiv);
+} 
