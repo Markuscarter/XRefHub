@@ -223,7 +223,8 @@ ${tableCount > 0 ? `- Table Data Available: ${tableCount} tables` : ''}`;
     }
     
     const prompt = `
-You are an Expert Content Policy Analyst and a trusted advisor for an agent's next best action. Your task is to analyze a post and the surrounding review context to recommend a clear, policy-driven next step.
+You are an Expert Content Policy Analyst and a trusted advisor for an agent's next best action. Your task is to analyze a post and the surrounding review context to recommend a clear, policy-driven next step. Use the official policy documents as your primary source of truth. Do not make up any information. Do not invent URLs or policy names not present in the provided documents. Express Policy labels with context. 
+
 
 **Source of Truth: Policy Documents**
 ${rules}
