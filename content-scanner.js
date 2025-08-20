@@ -26,11 +26,7 @@ async function enhancedContentScan() {
         statusIndicators: {},
         tableData: {},
         uiElements: {},
-            metadata: {},
-            images: [],
-            arsLabels: [],
-            iframeContent: [],
-            mediaUrls: []
+        metadata: {}
     };
 
     try {
@@ -59,7 +55,7 @@ async function enhancedContentScan() {
                 console.log('[Xrefhub Scanner] Found tweet text:', text.substring(0, 100) + '...');
                 
                 // Look for links in the tweet
-            const linkElement = tweetTextElement.querySelector('a');
+                const linkElement = tweetTextElement.querySelector('a');
                 if (linkElement && linkElement.href) {
                     result.landingUrl = linkElement.href;
                 }
@@ -101,166 +97,6 @@ async function enhancedContentScan() {
                 }
             }
         }
-
-        // --- Enhanced Image Collection ---
-        console.log('[Xrefhub Scanner] Extracting images with enhanced collection...');
-        const images = document.querySelectorAll('img');
-        console.log('[Xrefhub Scanner] Found', images.length, 'images on page');
-        
-        for (const img of images) {
-            try {
-                if (img.src && img.src.length > 0) {
-                    const imageInfo = {
-                        src: img.src,
-                        alt: img.alt || '',
-                        title: img.title || '',
-                        width: img.naturalWidth || img.width || 0,
-                        height: img.naturalHeight || img.height || 0,
-                        className: img.className || '',
-                        id: img.id || '',
-                        dataAttributes: {}
-                    };
-                    
-                    // Collect data attributes
-                    for (const attr of img.attributes) {
-                        if (attr.name.startsWith('data-')) {
-                            imageInfo.dataAttributes[attr.name] = attr.value;
-                        }
-                    }
-                    
-                    result.images.push(imageInfo);
-                }
-            } catch (imgError) {
-                console.log('[Xrefhub Scanner] Error processing image:', imgError.message);
-            }
-        }
-        
-        // --- ARS Label Detection ---
-        console.log('[Xrefhub Scanner] Detecting ARS labels...');
-        const arsSelectors = [
-            '[data-testid*="ars"]',
-            '[class*="ars"]',
-            '[id*="ars"]',
-            '[data-ars]',
-            '.ars-label',
-            '.ars-tag',
-            '[data-label*="ars"]'
-        ];
-        
-        for (const selector of arsSelectors) {
-            try {
-                const elements = document.querySelectorAll(selector);
-                elements.forEach(element => {
-                    const arsInfo = {
-                        text: safeGetText(element),
-                        selector: selector,
-                        className: element.className || '',
-                        id: element.id || '',
-                        dataAttributes: {}
-                    };
-                    
-                    // Collect data attributes
-                    for (const attr of element.attributes) {
-                        if (attr.name.startsWith('data-')) {
-                            arsInfo.dataAttributes[attr.name] = attr.value;
-                        }
-                    }
-                    
-                    if (arsInfo.text && arsInfo.text.length > 0) {
-                        result.arsLabels.push(arsInfo);
-                    }
-                });
-            } catch (arsError) {
-                console.log('[Xrefhub Scanner] Error with ARS selector', selector, ':', arsError.message);
-            }
-        }
-        
-        // --- Iframe Content Extraction ---
-        console.log('[Xrefhub Scanner] Extracting iframe content...');
-        const iframes = document.querySelectorAll('iframe');
-        console.log('[Xrefhub Scanner] Found', iframes.length, 'iframes on page');
-        
-        for (const iframe of iframes) {
-            try {
-                const iframeInfo = {
-                    src: iframe.src || '',
-                    title: iframe.title || '',
-                    width: iframe.width || 0,
-                    height: iframe.height || 0,
-                    className: iframe.className || '',
-                    id: iframe.id || '',
-                    dataAttributes: {}
-                };
-                
-                // Collect data attributes
-                for (const attr of iframe.attributes) {
-                    if (attr.name.startsWith('data-')) {
-                        iframeInfo.dataAttributes[attr.name] = attr.value;
-                    }
-                }
-                
-                result.iframeContent.push(iframeInfo);
-            } catch (iframeError) {
-                console.log('[Xrefhub Scanner] Error processing iframe:', iframeError.message);
-            }
-        }
-        
-        // --- Enhanced Media URL Collection ---
-        console.log('[Xrefhub Scanner] Collecting media URLs...');
-        const mediaSelectors = [
-            'img[src]',
-            'video[src]',
-            'audio[src]',
-            'iframe[src]',
-            'source[src]',
-            'link[href*=".jpg"], link[href*=".png"], link[href*=".gif"], link[href*=".webp"]',
-            'a[href*=".jpg"], a[href*=".png"], a[href*=".gif"], a[href*=".webp"]'
-        ];
-        
-        for (const selector of mediaSelectors) {
-            try {
-            const elements = document.querySelectorAll(selector);
-                elements.forEach(element => {
-                    const url = element.src || element.href;
-                    if (url && url.length > 0) {
-                        const mediaInfo = {
-                            url: url,
-                            type: element.tagName.toLowerCase(),
-                            alt: element.alt || '',
-                            title: element.title || '',
-                            className: element.className || '',
-                            id: element.id || ''
-                        };
-                        
-                        result.mediaUrls.push(mediaInfo);
-                    }
-                });
-            } catch (mediaError) {
-                console.log('[Xrefhub Scanner] Error with media selector', selector, ':', mediaError.message);
-            }
-        }
-                        alt: img.alt || '',
-                        title: img.title || '',
-                        width: img.width || 0,
-                        height: img.height || 0,
-                        naturalWidth: img.naturalWidth || 0,
-                        naturalHeight: img.naturalHeight || 0,
-                        className: img.className || '',
-                        id: img.id || ''
-                    };
-                    
-                    // Only include images that are likely to be content (not icons, etc.)
-                    if (imageInfo.naturalWidth > 100 && imageInfo.naturalHeight > 100) {
-                        result.images.push(imageInfo);
-                        console.log('[Xrefhub Scanner] Added image:', imageInfo.src.substring(0, 50) + '...');
-                    }
-                }
-            } catch (imgError) {
-                console.log('[Xrefhub Scanner] Error processing image:', imgError.message);
-            }
-        }
-        
-        console.log('[Xrefhub Scanner] Extracted', result.images.length, 'content images');
 
         // Final fallback: get page title and some body text
         if (result.adText === 'Not found') {
@@ -341,13 +177,13 @@ async function enhancedContentScan() {
         // --- Metadata ---
         console.log('[Xrefhub Scanner] Creating metadata...');
         try {
-        result.metadata = {
-            title: document.title || 'No title',
-            url: window.location.href,
-            userAgent: navigator.userAgent.substring(0, 100) + '...',
-            timestamp: Date.now(),
-            domain: window.location.hostname,
-            totalElements: document.querySelectorAll('*').length,
+            result.metadata = {
+                title: document.title || 'No title',
+                url: window.location.href,
+                userAgent: navigator.userAgent.substring(0, 100) + '...',
+                timestamp: Date.now(),
+                domain: window.location.hostname,
+                totalElements: document.querySelectorAll('*').length,
                 bodyText: document.body && typeof document.body.innerText === 'string' ? 
                     document.body.innerText.substring(0, 500) + '...' : 'No body'
             };
@@ -369,127 +205,6 @@ async function enhancedContentScan() {
             }
         } catch (e) {
             console.warn('[Xrefhub Scanner] Could not parse Post ID from URL.');
-        }
-
-        // --- Enhanced Image Collection ---
-        console.log('[Xrefhub Scanner] Collecting images...');
-        try {
-            const images = document.querySelectorAll('img');
-            images.forEach((img, index) => {
-                try {
-                    if (img.src && img.src.startsWith('http')) {
-                        result.images.push({
-                            src: img.src,
-                            alt: img.alt || '',
-                            title: img.title || '',
-                            width: img.naturalWidth || img.width,
-                            height: img.naturalHeight || img.height,
-                            className: img.className || '',
-                            id: img.id || ''
-                        });
-                    }
-                } catch (imgError) {
-                    console.log('[Xrefhub Scanner] Error processing image:', imgError.message);
-                }
-            });
-            console.log('[Xrefhub Scanner] Collected', result.images.length, 'images');
-        } catch (imageError) {
-            console.log('[Xrefhub Scanner] Error collecting images:', imageError.message);
-        }
-
-        // --- ARS Label Detection ---
-        console.log('[Xrefhub Scanner] Scanning for ARS labels...');
-        try {
-            const arsSelectors = [
-                '[data-testid*="ars"]',
-                '[class*="ars"]',
-                '[id*="ars"]',
-                '[aria-label*="ars"]',
-                '[title*="ars"]'
-            ];
-            
-            arsSelectors.forEach(selector => {
-                try {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach((el, index) => {
-                        const text = safeGetText(el);
-                        if (text && text.length > 0) {
-                            result.arsLabels.push({
-                                text: text,
-                                selector: selector,
-                                className: el.className || '',
-                                id: el.id || '',
-                                index: index
-                            });
-                        }
-                    });
-                } catch (selectorError) {
-                    console.log('[Xrefhub Scanner] Error with ARS selector', selector, ':', selectorError.message);
-                }
-            });
-            console.log('[Xrefhub Scanner] Found', result.arsLabels.length, 'ARS labels');
-        } catch (arsError) {
-            console.log('[Xrefhub Scanner] Error scanning ARS labels:', arsError.message);
-        }
-
-        // --- Iframe Content Extraction ---
-        console.log('[Xrefhub Scanner] Extracting iframe content...');
-        try {
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach((iframe, index) => {
-                try {
-                    if (iframe.src && iframe.src.startsWith('http')) {
-                        result.iframeContent.push({
-                            src: iframe.src,
-                            title: iframe.title || '',
-                            width: iframe.width || '',
-                            height: iframe.height || '',
-                            className: iframe.className || '',
-                            id: iframe.id || ''
-                        });
-                    }
-                } catch (iframeError) {
-                    console.log('[Xrefhub Scanner] Error processing iframe:', iframeError.message);
-                }
-            });
-            console.log('[Xrefhub Scanner] Found', result.iframeContent.length, 'iframes');
-        } catch (iframeError) {
-            console.log('[Xrefhub Scanner] Error extracting iframe content:', iframeError.message);
-        }
-
-        // --- Enhanced Media URL Collection ---
-        console.log('[Xrefhub Scanner] Collecting media URLs...');
-        try {
-            const mediaSelectors = [
-                'img[src*="http"]',
-                'video[src*="http"]',
-                'audio[src*="http"]',
-                'iframe[src*="http"]',
-                'source[src*="http"]'
-            ];
-            
-            mediaSelectors.forEach(selector => {
-                try {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach(el => {
-                        if (el.src && el.src.startsWith('http')) {
-                            result.mediaUrls.push({
-                                type: el.tagName.toLowerCase(),
-                                src: el.src,
-                                alt: el.alt || '',
-                                title: el.title || '',
-                                width: el.naturalWidth || el.width || '',
-                                height: el.naturalHeight || el.height || ''
-                            });
-                        }
-                    });
-                } catch (selectorError) {
-                    console.log('[Xrefhub Scanner] Error with media selector', selector, ':', selectorError.message);
-                }
-            });
-            console.log('[Xrefhub Scanner] Collected', result.mediaUrls.length, 'media URLs');
-        } catch (mediaError) {
-            console.log('[Xrefhub Scanner] Error collecting media URLs:', mediaError.message);
         }
 
         console.log('[Xrefhub Scanner] Scan complete. Final adText length:', result.adText?.length || 0);
