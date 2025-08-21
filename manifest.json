@@ -5,6 +5,7 @@
   "description": "Uses AI to analyze social media posts against policy rules and logs the results to a Google Sheet.",
   "permissions": [
     "storage",
+    "activeTab",
     "scripting",
     "identity",
     "identity.email",
